@@ -92,6 +92,8 @@
  * Contributing: http://www.tinymce.com/contributing
  */
 
+/*eslint no-labels:0, no-constant-condition: 0 */
+
 /**
  * This class logic for filtering text and matching words.
  *
@@ -256,7 +258,7 @@ define("tinymce/spellcheckerplugin/DomTextMatcher", [], function() {
 				return clone;
 			}
 
-			return function replace(range) {
+			return function(range) {
 				var before, after, parentNode, startNode = range.startNode,
 					endNode = range.endNode, matchIndex = range.matchIndex,
 					doc = dom.doc;
@@ -625,6 +627,7 @@ define("tinymce/spellcheckerplugin/Plugin", [
 
 		function isEmpty(obj) {
 			/*jshint unused:false*/
+			/*eslint no-unused-vars:0 */
 			for (var name in obj) {
 				return false;
 			}
