@@ -30,10 +30,12 @@ define("tinymce/ui/Control", [
 	var elementIdCache = {};
 	var hasMouseWheelEventSupport = "onmousewheel" in document;
 	var hasWheelEventSupport = false;
+	var classPrefix = "mce-";
 
 	var Control = Class.extend({
 		Statics: {
-			elementIdCache: elementIdCache
+			elementIdCache: elementIdCache,
+			classPrefix: classPrefix
 		},
 
 		isRtl: function() {
@@ -46,7 +48,7 @@ define("tinymce/ui/Control", [
 		 * @final
 		 * @field {String} classPrefix
 		 */
-		classPrefix: "mce-",
+		classPrefix: classPrefix,
 
 		/**
 		 * Constructs a new control instance with the specified settings.
@@ -510,7 +512,7 @@ define("tinymce/ui/Control", [
 
 				return function(e) {
 					if (!callback) {
-						self.parents().each(function(ctrl) {
+						self.parentsAndSelf().each(function(ctrl) {
 							var callbacks = ctrl.settings.callbacks;
 
 							if (callbacks && (callback = callbacks[name])) {
@@ -548,10 +550,10 @@ define("tinymce/ui/Control", [
 
 					if (nativeEvents[name]) {
 						if (!self._nativeEvents) {
-							self._nativeEvents = {name: true};
-						} else {
-							self._nativeEvents[name] = true;
+							self._nativeEvents = {};
 						}
+
+						self._nativeEvents[name] = true;
 
 						if (self._rendered) {
 							self.bindPendingEvents();
@@ -734,6 +736,17 @@ define("tinymce/ui/Control", [
 			}
 
 			return parents;
+		},
+
+		/**
+		 * Returns the current control and it's parents.
+		 *
+		 * @method parentsAndSelf
+		 * @param {String} selector Optional selector expression to find parents.
+		 * @return {tinymce.ui.Collection} Collection with all parent controls.
+		 */
+		parentsAndSelf: function(selector) {
+			return new Collection(this).add(this.parents(selector));
 		},
 
 		/**
@@ -1052,13 +1065,24 @@ define("tinymce/ui/Control", [
 		 * @return {String} Encoded and possible traslated string. 
 		 */
 		encode: function(text, translate) {
-			if (translate !== false && Control.translate) {
-				text = Control.translate(text);
+			if (translate !== false) {
+				text = this.translate(text);
 			}
 
 			return (text || '').replace(/[&<>"]/g, function(match) {
 				return '&#' + match.charCodeAt(0) + ';';
 			});
+		},
+
+		/**
+		 * Returns the translated string.
+		 *
+		 * @method translate
+		 * @param {String} text Text to translate.
+		 * @return {String} Translated string or the same as the input.
+		 */
+		translate: function(text) {
+			return Control.translate ? Control.translate(text) : text;
 		},
 
 		/**
@@ -1404,6 +1428,11 @@ define("tinymce/ui/Control", [
 					parents[i]._eventsRoot = eventRootCtrl;
 				}
 
+				var eventRootDelegates = eventRootCtrl._delegates;
+				if (!eventRootDelegates) {
+					eventRootDelegates = eventRootCtrl._delegates = {};
+				}
+
 				// Bind native event delegates
 				for (name in nativeEvents) {
 					if (!nativeEvents) {
@@ -1428,9 +1457,9 @@ define("tinymce/ui/Control", [
 							DomUtils.on(eventRootCtrl.getEl(), "mouseover", mouseEnterHandler);
 							eventRootCtrl._hasMouseEnter = 1;
 						}
-					} else if (!eventRootCtrl[name]) {
+					} else if (!eventRootDelegates[name]) {
 						DomUtils.on(eventRootCtrl.getEl(), name, delegate);
-						eventRootCtrl[name] = true;
+						eventRootDelegates[name] = true;
 					}
 
 					// Remove the event once it's bound

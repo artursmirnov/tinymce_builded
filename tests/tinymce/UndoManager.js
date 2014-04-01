@@ -149,26 +149,130 @@ test('Events', function() {
 	ok(redo.bookmark);
 });
 
-asyncTest('Undo added when typing and losing focus', function() {
-	window.focus();
+test('Transact', function() {
+	var count = 0;
 
-	window.setTimeout(function() {
-		start();
+	editor.undoManager.clear();
 
-		editor.focus();
-		editor.undoManager.clear();
-		editor.setContent("<p>some text</p>");
-		Utils.setSelection('p', 4, 'p', 9);
-		Utils.type('\b');
+	editor.on('BeforeAddUndo', function() {
+		count++;
+	});
 
-		// Move focus to an input element
-		var input = document.createElement('input');
-		document.getElementById('view').appendChild(input);
-		input.focus();
-		input.parentNode.removeChild(input);
+	editor.undoManager.transact(function() {
+		editor.undoManager.add();
+		editor.undoManager.add();
+	});
 
-		editor.execCommand('FormatBlock', false, 'h1');
-		editor.undoManager.undo();
-		equal(editor.getContent(), "<p>some</p>");
-	}, 0);
+	equal(count, 1);
+});
+
+test('Transact nested', function() {
+	var count = 0;
+
+	editor.undoManager.clear();
+
+	editor.on('BeforeAddUndo', function() {
+		count++;
+	});
+
+	editor.undoManager.transact(function() {
+		editor.undoManager.add();
+
+		editor.undoManager.transact(function() {
+			editor.undoManager.add();
+		});
+	});
+
+	equal(count, 1);
+});
+
+test('Transact exception', function() {
+	var count = 0;
+
+	editor.undoManager.clear();
+
+	editor.on('BeforeAddUndo', function() {
+		count++;
+	});
+
+	throws(
+		function() {
+			editor.undoManager.transact(function() {
+				throw new Error("Test");
+			});
+		},
+
+		"Test"
+	);
+
+	editor.undoManager.add();
+
+	equal(count, 1);
+});
+
+test('Exclude internal elements', function() {
+	var count = 0, lastLevel;
+
+	editor.undoManager.clear();
+	equal(count, 0);
+
+	editor.on('AddUndo', function() {
+		count++;
+	});
+
+	editor.on('BeforeAddUndo', function(e) {
+		lastLevel = e.level;
+	});
+
+	editor.getBody().innerHTML = (
+		'test' +
+		'<img src="about:blank" data-mce-selected="1" />' +
+		'<table data-mce-selected="1"><tr><td>x</td></tr></table>'
+	);
+
+	editor.undoManager.add();
+	equal(count, 1);
+	equal(Utils.cleanHtml(lastLevel.content),
+		'test' +
+		'<img src="about:blank">' +
+		'<table><tbody><tr><td>x</td></tr></tbody></table>'
+	);
+
+	editor.getBody().innerHTML = (
+		'<span data-mce-bogus="1">\u200B</span>' +
+		'<span data-mce-bogus="1">\uFEFF</span>' +
+		'<div data-mce-bogus="1"></div>' +
+		'test' +
+		'<img src="about:blank" />' +
+		'<table><tr><td>x</td></tr></table>'
+	);
+
+	editor.undoManager.add();
+	equal(count, 1);
+	equal(Utils.cleanHtml(lastLevel.content),
+		'test' +
+		'<img src="about:blank">' +
+		'<table><tbody><tr><td>x</td></tr></tbody></table>'
+	);
+});
+
+test('Undo added when typing and losing focus', function() {
+	var lastLevel;
+
+	editor.on('BeforeAddUndo', function(e) {
+		lastLevel = e.level;
+	});
+
+	editor.undoManager.clear();
+	editor.setContent("<p>some text</p>");
+	Utils.setSelection('p', 4, 'p', 9);
+	Utils.type('\b');
+
+	equal(Utils.cleanHtml(lastLevel.content), "<p>some text</p>");
+	editor.fire('blur');
+	equal(Utils.cleanHtml(lastLevel.content), "<p>some</p>");
+
+	editor.execCommand('FormatBlock', false, 'h1');
+	editor.undoManager.undo();
+	equal(editor.getContent(), "<p>some</p>");
 });

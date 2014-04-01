@@ -719,12 +719,10 @@ define("tinymce/Editor", [
 
 					DOM.removeClass(bodyEl, 'mce-content-body');
 					DOM.removeClass(bodyEl, 'mce-edit-focus');
-					DOM.setAttrib(bodyEl, 'tabIndex', null);
 					DOM.setAttrib(bodyEl, 'contentEditable', null);
 				});
 
 				DOM.addClass(targetElm, 'mce-content-body');
-				targetElm.tabIndex = -1;
 				self.contentDocument = doc = settings.content_document || document;
 				self.contentWindow = settings.content_window || window;
 				self.bodyElement = targetElm;
@@ -791,7 +789,7 @@ define("tinymce/Editor", [
 			self.parser = new DomParser(settings, self.schema);
 
 			// Convert src and href into data-mce-src, data-mce-href and data-mce-style
-			self.parser.addAttributeFilter('src,href,style', function(nodes, name) {
+			self.parser.addAttributeFilter('src,href,style,tabindex', function(nodes, name) {
 				var i = nodes.length, node, dom = self.dom, value, internalName;
 
 				while (i--) {
@@ -803,6 +801,9 @@ define("tinymce/Editor", [
 					if (!node.attributes.map[internalName]) {
 						if (name === "style") {
 							node.attr(internalName, dom.serializeStyle(dom.parseStyle(value), node.name));
+						} else if (name === "tabindex") {
+							node.attr(internalName, value);
+							node.attr(name, null);
 						} else {
 							node.attr(internalName, self.convertURL(value, name, node.name));
 						}
@@ -1031,8 +1032,13 @@ define("tinymce/Editor", [
 					body = self.getBody();
 
 					// Check for setActive since it doesn't scroll to the element
-					if (body.setActive && Env.ie < 11) {
-						body.setActive();
+					if (body.setActive) {
+						// IE 11 sometimes throws "Invalid function" then fallback to focus
+						try {
+							body.setActive();
+						} catch (ex) {
+							body.focus();
+						}
 					} else {
 						body.focus();
 					}
@@ -2011,21 +2017,26 @@ define("tinymce/Editor", [
 			var self = this;
 
 			if (!self.removed) {
+				self.removed = 1;
 				self.save();
-				self.fire('remove');
-				self.off();
-				self.removed = 1; // Cancels post remove event execution
 
 				// Remove any hidden input
 				if (self.hasHiddenInput) {
 					DOM.remove(self.getElement().nextSibling);
 				}
 
-				DOM.setStyle(self.id, 'display', self.orgDisplay);
+				if (!self.inline) {
+					// IE 9 has a bug where the selection stops working if you place the
+					// caret inside the editor then remove the iframe
+					if (ie && ie < 10) {
+						self.getDoc().execCommand('SelectAll', false, null);
+					}
 
-				// Don't clear the window or document if content editable
-				// is enabled since other instances might still be present
-				if (!self.settings.content_editable) {
+					DOM.setStyle(self.id, 'display', self.orgDisplay);
+					self.getBody().onload = null; // Prevent #6816
+
+					// Don't clear the window or document if content editable
+					// is enabled since other instances might still be present
 					Event.unbind(self.getWin());
 					Event.unbind(self.getDoc());
 				}
@@ -2033,6 +2044,8 @@ define("tinymce/Editor", [
 				var elm = self.getContainer();
 				Event.unbind(self.getBody());
 				Event.unbind(elm);
+
+				self.fire('remove');
 
 				self.editorManager.remove(self);
 				DOM.remove(elm);

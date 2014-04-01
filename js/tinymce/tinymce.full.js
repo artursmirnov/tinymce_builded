@@ -1,4 +1,4 @@
-// 4.0.21 (2014-04-01)
+// 4.0.21 (2014-03-xx)
 
 /**
  * Compiled inline version. (Library mode)
@@ -7320,9 +7320,9 @@ define("tinymce/dom/DOMUtils", [
 
 						// Keep elements with data-bookmark attributes or name attribute like <a name="1"></a>
 						attributes = self.getAttribs(node);
-						i = attributes.length;
+						i = node.attributes.length;
 						while (i--) {
-							name = attributes[i].nodeName;
+							name = node.attributes[i].nodeName;
 							if (name === "name" || name === 'data-mce-bookmark') {
 								return false;
 							}
@@ -12901,7 +12901,7 @@ define("tinymce/dom/RangeUtils", [
 			var normalized, collapsed;
 
 			function normalizeEndPoint(start) {
-				var container, offset, walker, body = dom.getRoot(), node, nonEmptyElementsMap;
+				var container, offset, walker, body = dom.getRoot(), node, nonEmptyElementsMap, nodeName;
 				var directionLeft, isAfterNode;
 
 				function hasBrBeforeAfter(node, left) {
@@ -12984,6 +12984,7 @@ define("tinymce/dom/RangeUtils", [
 					if (directionLeft) {
 						node = container.childNodes[offset > 0 ? offset - 1 : 0];
 						if (node) {
+							nodeName = node.nodeName.toLowerCase();
 							if (nonEmptyElementsMap[node.nodeName] || node.nodeName == "TABLE") {
 								return;
 							}
@@ -20331,12 +20332,10 @@ define("tinymce/ui/Control", [
 	var elementIdCache = {};
 	var hasMouseWheelEventSupport = "onmousewheel" in document;
 	var hasWheelEventSupport = false;
-	var classPrefix = "mce-";
 
 	var Control = Class.extend({
 		Statics: {
-			elementIdCache: elementIdCache,
-			classPrefix: classPrefix
+			elementIdCache: elementIdCache
 		},
 
 		isRtl: function() {
@@ -20349,7 +20348,7 @@ define("tinymce/ui/Control", [
 		 * @final
 		 * @field {String} classPrefix
 		 */
-		classPrefix: classPrefix,
+		classPrefix: "mce-",
 
 		/**
 		 * Constructs a new control instance with the specified settings.
@@ -24263,17 +24262,6 @@ define("tinymce/ui/Window", [
 				DomUtils.removeClass(document.documentElement, prefix + 'fullscreen');
 				DomUtils.removeClass(document.body, prefix + 'fullscreen');
 			}
-		},
-
-		/**
-		 * Returns the contentWindow object of the iframe if it exists.
-		 *
-		 * @method getContentWindow
-		 * @return {Window} window object or null.
-		 */
-		getContentWindow: function() {
-			var ifr = this.getEl().getElementsByTagName('iframe')[0];
-			return ifr ? ifr.contentWindow : null;
 		}
 	});
 
@@ -24625,7 +24613,7 @@ define("tinymce/WindowManager", [
 			// Takes a snapshot in the FocusManager of the selection before focus is lost to dialog
 			editor.nodeChanged();
 
-			return win.renderTo().reflow();
+			return win.renderTo(document.body).reflow();
 		};
 
 		/**
@@ -24708,16 +24696,6 @@ define("tinymce/WindowManager", [
 			if (getTopMostWindow()) {
 				getTopMostWindow().params = params;
 			}
-		};
-
-		/**
-		 * Returns the currently opened window objects.
-		 *
-		 * @method getWindows
-		 * @return {Array} Array of the currently opened windows.
-		 */
-		self.getWindows = function() {
-			return windows;
 		};
 	};
 });
@@ -25918,14 +25896,13 @@ define("tinymce/util/Observable", [
 		fire: function(name, args, bubble) {
 			var self = this, handlers, i, l, callback, parent;
 
+			if (self.removed) {
+				return;
+			}
+
 			name = name.toLowerCase();
 			args = args || {};
 			args.type = name;
-
-			// Prevent all events except the remove event after the editor has been removed
-			if (self.removed && name !== "remove") {
-				return;
-			}
 
 			// Setup target is there isn't one
 			if (!args.target) {
@@ -28258,26 +28235,21 @@ define("tinymce/Editor", [
 			var self = this;
 
 			if (!self.removed) {
-				self.removed = 1;
 				self.save();
+				self.fire('remove');
+				self.off();
+				self.removed = 1; // Cancels post remove event execution
 
 				// Remove any hidden input
 				if (self.hasHiddenInput) {
 					DOM.remove(self.getElement().nextSibling);
 				}
 
-				if (!self.inline) {
-					// IE 9 has a bug where the selection stops working if you place the
-					// caret inside the editor then remove the iframe
-					if (ie && ie < 10) {
-						self.getDoc().execCommand('SelectAll', false, null);
-					}
+				DOM.setStyle(self.id, 'display', self.orgDisplay);
 
-					DOM.setStyle(self.id, 'display', self.orgDisplay);
-					self.getBody().onload = null; // Prevent #6816
-
-					// Don't clear the window or document if content editable
-					// is enabled since other instances might still be present
+				// Don't clear the window or document if content editable
+				// is enabled since other instances might still be present
+				if (!self.settings.content_editable) {
 					Event.unbind(self.getWin());
 					Event.unbind(self.getDoc());
 				}
@@ -28285,8 +28257,6 @@ define("tinymce/Editor", [
 				var elm = self.getContainer();
 				Event.unbind(self.getBody());
 				Event.unbind(elm);
-
-				self.fire('remove');
 
 				self.editorManager.remove(self);
 				DOM.remove(elm);
@@ -28796,7 +28766,7 @@ define("tinymce/EditorManager", [
 		 * @property releaseDate
 		 * @type String
 		 */
-		releaseDate: '2014-04-01',
+		releaseDate: '2014-03-xx',
 
 		/**
 		 * Collection of editor instances.
@@ -28937,14 +28907,6 @@ define("tinymce/EditorManager", [
 				return id;
 			}
 
-			function createEditor(id, settings) {
-				if (!self.get(id)) {
-					var editor = new Editor(id, settings, self);
-					editors.push(editor);
-					editor.render();
-				}
-			}
-
 			function execCallback(se, n, s) {
 				var f = se[n];
 
@@ -28970,7 +28932,9 @@ define("tinymce/EditorManager", [
 					// Process type specific selector
 					each(settings.types, function(type) {
 						each(DOM.select(type.selector), function(elm) {
-							createEditor(createId(elm), extend({}, settings, type));
+							var editor = new Editor(createId(elm), extend({}, settings, type), self);
+							editors.push(editor);
+							editor.render();
 						});
 					});
 
@@ -28978,7 +28942,9 @@ define("tinymce/EditorManager", [
 				} else if (settings.selector) {
 					// Process global selector
 					each(DOM.select(settings.selector), function(elm) {
-						createEditor(createId(elm), settings);
+						var editor = new Editor(createId(elm), settings, self);
+						editors.push(editor);
+						editor.render();
 					});
 
 					return;
@@ -29001,7 +28967,10 @@ define("tinymce/EditorManager", [
 											if (e.name === v) {
 												v = 'mce_editor_' + instanceCounter++;
 												DOM.setAttrib(e, 'id', v);
-												createEditor(v, settings);
+
+												editor = new Editor(v, settings, self);
+												editors.push(editor);
+												editor.render();
 											}
 										});
 									});
@@ -29018,7 +28987,9 @@ define("tinymce/EditorManager", [
 							}
 
 							if (!settings.editor_selector || hasClass(elm, settings.editor_selector)) {
-								createEditor(createId(elm), settings);
+								editor = new Editor(createId(elm), settings, self);
+								editors.push(editor);
+								editor.render();
 							}
 						});
 						break;
@@ -29076,11 +29047,11 @@ define("tinymce/EditorManager", [
 		 * });
 		 */
 		get: function(id) {
-			if (!arguments.length) {
+			if (id === undefined) {
 				return this.editors;
 			}
 
-			return id in this.editors ? this.editors[id] : null;
+			return this.editors[id];
 		},
 
 		/**
@@ -34918,9 +34889,8 @@ define("tinymce/ui/TextBox", [
  * @class tinymce.ui.Throbber
  */
 define("tinymce/ui/Throbber", [
-	"tinymce/ui/DomUtils",
-	"tinymce/ui/Control"
-], function(DomUtils, Control) {
+	"tinymce/ui/DomUtils"
+], function(DomUtils) {
 	"use strict";
 
 	/**
@@ -34928,10 +34898,9 @@ define("tinymce/ui/Throbber", [
 	 *
 	 * @constructor
 	 * @param {Element} elm DOM Html element to display throbber in.
-	 * @param {Boolean} inline Optional true/false state if the throbber should be appended to end of element for infinite scroll.
 	 */
-	return function(elm, inline) {
-		var self = this, state, classPrefix = Control.classPrefix;
+	return function(elm) {
+		var self = this, state;
 
 		/**
 		 * Shows the throbber.
@@ -34947,9 +34916,7 @@ define("tinymce/ui/Throbber", [
 
 			window.setTimeout(function() {
 				if (state) {
-					elm.appendChild(DomUtils.createFragment(
-						'<div class="' + classPrefix + 'throbber' + (inline ? ' ' + classPrefix + 'throbber-inline' : '') + '"></div>'
-					));
+					elm.appendChild(DomUtils.createFragment('<div class="mce-throbber"></div>'));
 				}
 			}, time || 0);
 
