@@ -135,11 +135,15 @@ test('Script urls denied', function() {
 
 	equal(styles.serialize(styles.parse('behavior:url(test.htc)')), "");
 	equal(styles.serialize(styles.parse('color:expression(alert(1))')), "");
+	equal(styles.serialize(styles.parse('color:\\65xpression(alert(1))')), "");
+	equal(styles.serialize(styles.parse('color:exp/**/ression(alert(1))')), "");
+	equal(styles.serialize(styles.parse('color:/**/')), "");
 	equal(styles.serialize(styles.parse('color:  expression  (  alert(1))')), "");
 	equal(styles.serialize(styles.parse('background:url(jAvaScript:alert(1)')), "");
 	equal(styles.serialize(styles.parse('background:url(javascript:alert(1)')), "");
 	equal(styles.serialize(styles.parse('background:url(vbscript:alert(1)')), "");
 	equal(styles.serialize(styles.parse('background:url(j\navas\u0000cr\tipt:alert(1)')), "");
+	equal(styles.serialize(styles.parse('background:url(data:image/svg+xml,%3Csvg/%3E)')), "");
 });
 
 test('Script urls allowed', function() {
