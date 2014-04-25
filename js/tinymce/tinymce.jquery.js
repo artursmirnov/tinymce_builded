@@ -1,4 +1,4 @@
-// 4.0.22 (2014-04-16)
+// 4.0.23 (2014-04-24)
 
 /**
  * Compiled inline version. (Library mode)
@@ -12048,11 +12048,11 @@ define("tinymce/Formatter", [
 				valignmiddle: [
 					{selector: 'td,th', styles: {'verticalAlign': 'middle'}}
 				],
-				
+
 				valignbottom: [
 					{selector: 'td,th', styles: {'verticalAlign': 'bottom'}}
-				],				
-				
+				],
+
 				alignleft: [
 					{selector: 'figure,p,h1,h2,h3,h4,h5,h6,td,th,tr,div,ul,ol,li', styles: {textAlign: 'left'}, defaultBlock: 'div'},
 					{selector: 'img,table', collapsed: false, styles: {'float': 'left'}}
@@ -12266,6 +12266,16 @@ define("tinymce/Formatter", [
 					each(fmt.styles, function(value, name) {
 						dom.setStyle(elm, name, replaceVars(value, vars));
 					});
+
+					// Needed for the WebKit span spam bug
+					// TODO: Remove this once WebKit/Blink fixes this
+					if (fmt.styles) {
+						var styleVal = dom.getAttrib(elm, 'style');
+
+						if (styleVal) {
+							elm.setAttribute('data-mce-style', styleVal);
+						}
+					}
 
 					each(fmt.attributes, function(value, name) {
 						dom.setAttrib(elm, name, replaceVars(value, vars));
@@ -16312,7 +16322,13 @@ define("tinymce/EditorCommands", [
 define("tinymce/util/URI", [
 	"tinymce/util/Tools"
 ], function(Tools) {
-	var each = Tools.each, trim = Tools.trim;
+	var each = Tools.each, trim = Tools.trim,
+		DEFAULT_PORTS = {
+			'ftp': 21,
+			'http': 80,
+			'https': 443,
+			'mailto': 25
+		};
 
 	/**
 	 * Constructs a new URI instance.
@@ -16484,7 +16500,31 @@ define("tinymce/util/URI", [
 		toAbsolute: function(uri, noHost) {
 			uri = new URI(uri, {base_uri: this});
 
-			return uri.getURI(this.host == uri.host && this.protocol == uri.protocol ? noHost : 0);
+			return uri.getURI(noHost && this.isSameOrigin(uri));
+		},
+
+		/**
+		 * Determine whether the given URI has the same origin as this URI.  Based on RFC-6454.
+		 * Supports default ports for protocols listed in DEFAULT_PORTS.  Unsupported protocols will fail safe: they
+		 * won't match, if the port specifications differ.
+		 *
+		 * @method isSameOrigin
+		 * @param {tinymce.util.URI} uri Uri instance to compare.
+		 * @returns {Boolean} True if the origins are the same.
+		 */
+		isSameOrigin: function(uri) {
+			if (this.host == uri.host && this.protocol == uri.protocol){
+				if (this.port == uri.port) {
+					return true;
+				}
+
+				var defaultPort = DEFAULT_PORTS[this.protocol];
+				if (defaultPort && ((this.port || defaultPort) == (uri.port || defaultPort))) {
+					return true;
+				}
+			}
+
+			return false;
 		},
 
 		/**
@@ -16742,6 +16782,8 @@ define("tinymce/util/Class", [
 		// Instantiate a base class (but only create the instance,
 		// don't run the init constructor)
 		initializing = true;
+		
+		/*eslint new-cap:0 */
 		prototype = new self();
 		initializing = false;
 
@@ -17760,7 +17802,7 @@ define("tinymce/ui/Control", [
 	"use strict";
 
 	var nativeEvents = Tools.makeMap("focusin focusout scroll click dblclick mousedown mouseup mousemove mouseover" +
-								" mouseout mouseenter mouseleave wheel keydown keypress keyup contextmenu", " ");
+								" mouseout mouseenter mouseleave wheel keydown keypress input keyup contextmenu", " ");
 
 	var elementIdCache = {};
 	var hasMouseWheelEventSupport = "onmousewheel" in document;
@@ -22249,7 +22291,7 @@ define("tinymce/util/Quirks", [
 		 */
 		function cleanupStylesWhenDeleting() {
 			var doc = editor.getDoc(), urlPrefix = 'data:text/mce-internal,';
-			var MutationObserver = window.MutationObserver, olderWebKit;
+			var MutationObserver = window.MutationObserver, olderWebKit, dragStartRng;
 
 			// Add mini polyfill for older WebKits
 			// TODO: Remove this when old Safari versions gets updated
@@ -22403,8 +22445,19 @@ define("tinymce/util/Quirks", [
 			}
 
 			editor.on('dragstart', function(e) {
+				var selectionHtml;
+
+				if (editor.selection.isCollapsed() && e.target.tagName == 'IMG') {
+					selection.select(e.target);
+				}
+
+				dragStartRng = selection.getRng();
+				selectionHtml = editor.selection.getContent();
+
 				// Safari doesn't support custom dataTransfer items so we can only use URL and Text
-				e.dataTransfer.setData('URL', 'data:text/mce-internal,' + escape(editor.selection.getContent()));
+				if (selectionHtml.length > 0) {
+					e.dataTransfer.setData('URL', 'data:text/mce-internal,' + escape(selectionHtml));
+				}
 			});
 
 			editor.on('drop', function(e) {
@@ -22418,10 +22471,26 @@ define("tinymce/util/Quirks", [
 					internalContent = unescape(internalContent.substr(urlPrefix.length));
 					if (doc.caretRangeFromPoint) {
 						e.preventDefault();
-						customDelete();
-						editor.selection.setRng(doc.caretRangeFromPoint(e.x, e.y));
-						editor.insertContent(internalContent);
+
+						// Safari has a weird issue where drag/dropping images sometimes
+						// produces a green plus icon. When this happens the caretRangeFromPoint
+						// will return "null" even though the x, y coordinate is correct.
+						// But if we detach the insert from the drop event we will get a proper range
+						window.setTimeout(function() {
+							var pointRng = doc.caretRangeFromPoint(e.x, e.y);
+
+							if (dragStartRng) {
+								selection.setRng(dragStartRng);
+								dragStartRng = null;
+							}
+
+							customDelete();
+
+							selection.setRng(pointRng);
+							editor.insertContent(internalContent);
+						}, 0);
 					}
+
 				}
 			});
 
@@ -23215,7 +23284,7 @@ define("tinymce/util/Quirks", [
 		 */
 		function doubleTrailingBrElements() {
 			if (!editor.inline) {
-				editor.on('focus blur', function() {
+				editor.on('focus blur beforegetcontent', function() {
 					var br = editor.dom.create('br');
 					editor.getBody().appendChild(br);
 					br.parentNode.removeChild(br);
@@ -26033,18 +26102,6 @@ define("tinymce/FocusManager", [
 			return !!DOM.getParent(elm, FocusManager.isEditorUIElement);
 		}
 
-		function isNodeInBodyOfEditor(node, editor) {
-			var body = editor.getBody();
-
-			while (node) {
-				if (node == body) {
-					return true;
-				}
-
-				node = node.parentNode;
-			}
-		}
-
 		function registerEvents(e) {
 			var editor = e.editor;
 
@@ -26060,7 +26117,7 @@ define("tinymce/FocusManager", [
 							node = editor.getBody();
 						}
 
-						if (isNodeInBodyOfEditor(node, editor)) {
+						if (editor.dom.isChildOf(node, editor.getBody())) {
 							editor.lastRng = editor.selection.getRng();
 						}
 					});
@@ -26168,8 +26225,7 @@ define("tinymce/FocusManager", [
 						var rng = activeEditor.selection.getRng();
 
 						if (!rng.collapsed) {
-							activeEditor.lastRng = activeEditor.selection.getRng();
-							activeEditor.selection.lastFocusBookmark = createBookmark(activeEditor.dom, activeEditor.lastRng);
+							activeEditor.lastRng = rng;
 						}
 					}
 				};
@@ -26244,9 +26300,46 @@ define("tinymce/EditorManager", [
 ], function(Editor, DOMUtils, URI, Env, Tools, Observable, I18n, FocusManager) {
 	var DOM = DOMUtils.DOM;
 	var explode = Tools.explode, each = Tools.each, extend = Tools.extend;
-	var instanceCounter = 0, beforeUnloadDelegate;
+	var instanceCounter = 0, beforeUnloadDelegate, EditorManager;
 
-	var EditorManager = {
+	function removeEditorFromList(editor) {
+		var editors = EditorManager.editors, removedFromList;
+
+		delete editors[editor.id];
+
+		for (var i = 0; i < editors.length; i++) {
+			if (editors[i] == editor) {
+				editors.splice(i, 1);
+				removedFromList = true;
+				break;
+			}
+		}
+
+		// Select another editor since the active one was removed
+		if (EditorManager.activeEditor == editor) {
+			EditorManager.activeEditor = editors[0];
+		}
+
+		// Clear focusedEditor if necessary, so that we don't try to blur the destroyed editor
+		if (EditorManager.focusedEditor == editor) {
+			EditorManager.focusedEditor = null;
+		}
+
+		return removedFromList;
+	}
+
+	function purgeDestroyedEditor(editor) {
+		// User has manually destroyed the editor lets clean up the mess
+		if (editor && !(editor.getContainer() || editor.getBody()).parentNode) {
+			removeEditorFromList(editor);
+			editor.destroy(true);
+			editor = null;
+		}
+
+		return editor;
+	}
+
+	EditorManager = {
 		/**
 		 * Major version of TinyMCE build.
 		 *
@@ -26261,7 +26354,7 @@ define("tinymce/EditorManager", [
 		 * @property minorVersion
 		 * @type String
 		 */
-		minorVersion : '0.22',
+		minorVersion : '0.23',
 
 		/**
 		 * Release date of TinyMCE build.
@@ -26269,7 +26362,7 @@ define("tinymce/EditorManager", [
 		 * @property releaseDate
 		 * @type String
 		 */
-		releaseDate: '2014-04-16',
+		releaseDate: '2014-04-24',
 
 		/**
 		 * Collection of editor instances.
@@ -26302,7 +26395,7 @@ define("tinymce/EditorManager", [
 		activeEditor: null,
 
 		setup: function() {
-			var self = this, baseURL, documentBaseURL, suffix = "", preInit;
+			var self = this, baseURL, documentBaseURL, suffix = "", preInit, src;
 
 			// Get base URL for the current document
 			documentBaseURL = document.location.href.replace(/[\?#].*$/, '').replace(/[\/\\][^\/]+$/, '');
@@ -26319,7 +26412,7 @@ define("tinymce/EditorManager", [
 				// Get base where the tinymce script is located
 				var scripts = document.getElementsByTagName('script');
 				for (var i = 0; i < scripts.length; i++) {
-					var src = scripts[i].src;
+					src = scripts[i].src;
 
 					// Script types supported:
 					// tinymce.js tinymce.min.js tinymce.dev.js
@@ -26333,6 +26426,18 @@ define("tinymce/EditorManager", [
 						baseURL = src.substring(0, src.lastIndexOf('/'));
 						break;
 					}
+				}
+
+				// We didn't find any baseURL by looking at the script elements
+				// Try to use the document.currentScript as a fallback
+				if (!baseURL && document.currentScript) {
+					src = document.currentScript.src;
+
+					if (src.indexOf('.min') != -1) {
+						suffix = '.min';
+					}
+
+					baseURL = src.substring(0, src.lastIndexOf('/'));
 				}
 			}
 
@@ -26411,7 +26516,7 @@ define("tinymce/EditorManager", [
 			}
 
 			function createEditor(id, settings) {
-				if (!self.get(id)) {
+				if (!purgeDestroyedEditor(self.get(id))) {
 					var editor = new Editor(id, settings, self);
 					editors.push(editor);
 					editor.render();
@@ -26624,7 +26729,7 @@ define("tinymce/EditorManager", [
 		 * @return {tinymce.Editor} The editor that got passed in will be return if it was found otherwise null.
 		 */
 		remove: function(selector) {
-			var self = this, i, editors = self.editors, editor, removedFromList;
+			var self = this, i, editors = self.editors, editor;
 
 			// Remove all editors
 			if (!selector) {
@@ -26654,28 +26759,13 @@ define("tinymce/EditorManager", [
 				return null;
 			}
 
-			delete editors[editor.id];
-
-			for (i = 0; i < editors.length; i++) {
-				if (editors[i] == editor) {
-					editors.splice(i, 1);
-					removedFromList = true;
-					break;
-				}
-			}
-
-			// Select another editor since the active one was removed
-			if (self.activeEditor == editor) {
-				self.activeEditor = editors[0];
-			}
-
 			/**
 			 * Fires when an editor is removed from EditorManager collection.
 			 *
 			 * @event RemoveEditor
 			 * @param {Object} e Event arguments.
 			 */
-			if (removedFromList) {
+			if (removeEditorFromList(editor)) {
 				self.fire('RemoveEditor', {editor: editor});
 			}
 
@@ -30575,6 +30665,7 @@ define("tinymce/ui/Iframe", [
 			self.addClass('iframe');
 			self.canFocus = false;
 
+			/*eslint no-script-url:0 */
 			return (
 				'<iframe id="' + self._id + '" class="' + self.classes() + '" tabindex="-1" src="' +
 				(self.settings.url || "javascript:\'\'") + '" frameborder="0"></iframe>'

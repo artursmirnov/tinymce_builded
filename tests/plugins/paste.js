@@ -23,6 +23,7 @@ module("tinymce.plugins.Paste", {
 		delete editor.settings.paste_retain_style_properties;
 		delete editor.settings.paste_enable_default_filters;
 		delete editor.settings.paste_data_images;
+		delete editor.settings.paste_webkit_styles;
 	}
 });
 
@@ -43,6 +44,7 @@ test("Paste styled text content", function() {
 	var rng = editor.dom.createRng();
 
 	editor.settings.paste_remove_styles_if_webkit = false;
+
 	editor.setContent('<p>1234</p>');
 	rng.setStart(editor.getBody().firstChild.firstChild, 1);
 	rng.setEnd(editor.getBody().firstChild.firstChild, 3);
@@ -88,7 +90,7 @@ test("Paste Word fake list", function() {
 	equal(editor.getContent(), '<ul><li>Item 1</li><li>Item 2</li><li>Item 3</li><li>Item 4</li><li>Item 5</li><li>Item 6</li></ul>');
 
 	editor.settings.paste_retain_style_properties = 'border';
-	
+
 	rng = editor.dom.createRng();
 	editor.setContent('<p>1234</p>');
 	rng.setStart(editor.getBody().firstChild.firstChild, 0);
@@ -198,7 +200,12 @@ test("Paste Word links", function() {
 				'<a href="#_Toc238571849">2</a>' +
 				'<a name="Toc238571849">3</a>' +
 				'<a name="_Toc238571849">4</a>' +
+				'<a href="#_ftn238571849" name="_ftnref238571849">[5]</a>' +
+				'<a href="#_ftnref238571849" name="_ftn238571849">[5]</a>' +
+				'<a href="#_edn238571849" name="_ednref238571849">[6]</a>' +
+				'<a href="#_ednref238571849" name="_edn238571849">[6]</a>' +
 				'<a href="http://www.tinymce.com/someurl">4</a>' +
+				'<a href="http://www.tinymce.com/someurl" name="named_link">named_link</a>' +
 				'<a>5</a>' +
 			'</p>'
 		)
@@ -210,7 +217,12 @@ test("Paste Word links", function() {
 			'<a href="#_Toc238571849">2</a>' +
 			'<a name="Toc238571849"></a>3' +
 			'<a name="_Toc238571849"></a>4' +
+			'<a href="#_ftn238571849" name="_ftnref238571849">[5]</a>' +
+			'<a href="#_ftnref238571849" name="_ftn238571849">[5]</a>' +
+			'<a href="#_edn238571849" name="_ednref238571849">[6]</a>' +
+			'<a href="#_ednref238571849" name="_edn238571849">[6]</a>' +
 			'<a href="http://www.tinymce.com/someurl">4</a>' +
+			'named_link' +
 			'5' +
 		'</p>'
 	));
@@ -286,7 +298,7 @@ test("Disable default filters", function() {
 	// Test color
 	editor.setContent('');
 	editor.execCommand('SelectAll');
-	
+
 	editor.execCommand('mceInsertClipboardContent', false, {content: '<p class="MsoNormal" style="color: #ff0000;">Test</p>'});
 	equal(editor.getContent(), '<p class="MsoNormal" style="color: #ff0000;">Test</p>');
 });
@@ -473,25 +485,54 @@ test('paste innerText of textnode with whitespace', function() {
 });
 
 if (tinymce.Env.webkit) {
+	test('paste webkit body fragment', function() {
+		editor.setContent('');
+		editor.execCommand('mceInsertClipboardContent', false, {content: 'a\n<body>\n<!--StartFragment-->\nb\n<!--EndFragment-->\n</body>\nc'});
+		equal(editor.getContent(), '<p>b</p>');
+	});
+
+	test('paste webkit body fragment no line feeds', function() {
+		editor.setContent('');
+		editor.execCommand('mceInsertClipboardContent', false, {content: 'a<body><!--StartFragment-->b<!--EndFragment--></body>c'});
+		equal(editor.getContent(), '<p>b</p>');
+	});
+
+	test('paste webkit inner fragment', function() {
+		editor.setContent('');
+		editor.execCommand('mceInsertClipboardContent', false, {content: 'a<!--StartFragment-->b<!--EndFragment-->c'});
+		equal(editor.getContent(), '<p>abc</p>');
+	});
+
+	test('paste webkit remove runtime styles internal', function() {
+		editor.settings.paste_webkit_styles = 'color';
+		editor.setContent('');
+		editor.execCommand('mceInsertClipboardContent', false, {content: '<span style="color:red; font-size: 42px" data-mce-style="color: red;">Test</span>'});
+		equal(editor.getContent(), '<p><span style="color: red;">Test</span></p>');
+	});
+
 	test('paste webkit remove runtime styles (color)', function() {
+		editor.settings.paste_webkit_styles = 'color';
 		editor.setContent('');
 		editor.execCommand('mceInsertClipboardContent', false, {content: '<span style="color:red; text-indent: 10px">Test</span>'});
 		equal(editor.getContent(), '<p><span style="color: red;">Test</span></p>');
 	});
 
 	test('paste webkit remove runtime styles (background-color)', function() {
+		editor.settings.paste_webkit_styles = 'background-color';
 		editor.setContent('');
 		editor.execCommand('mceInsertClipboardContent', false, {content: '<span style="background-color:red; text-indent: 10px">Test</span>'});
 		equal(editor.getContent(), '<p><span style="background-color: red;">Test</span></p>');
 	});
 
 	test('paste webkit remove runtime styles (font-size)', function() {
+		editor.settings.paste_webkit_styles = 'font-size';
 		editor.setContent('');
 		editor.execCommand('mceInsertClipboardContent', false, {content: '<span style="font-size:42px; text-indent: 10px">Test</span>'});
 		equal(editor.getContent(), '<p><span style="font-size: 42px;">Test</span></p>');
 	});
 
 	test('paste webkit remove runtime styles (font-family)', function() {
+		editor.settings.paste_webkit_styles = 'font-family';
 		editor.setContent('');
 		editor.execCommand('mceInsertClipboardContent', false, {content: '<span style="font-family:Arial; text-indent: 10px">Test</span>'});
 		equal(editor.getContent(), '<p><span style="font-family: Arial;">Test</span></p>');
@@ -519,18 +560,19 @@ if (tinymce.Env.webkit) {
 	});
 
 	test('paste webkit remove runtime styles (color) in the same (color) (named)', function() {
+		editor.settings.paste_webkit_styles = 'color';
+
 		editor.setContent('<p style="color:red">Test</span>');
 		Utils.setSelection('p', 0, 'p', 4);
 
 		editor.execCommand('mceInsertClipboardContent', false, {
 			content: (
-				'<span style="color:red; text-indent: 10px">a</span>' +
-				'<span style="color:#ff0000; text-indent: 10px">b</span>' +
-				'<span style="color:rgb(255, 0, 0); text-indent: 10px">c</span>'
+				'<span style="color:#ff0000; text-indent: 10px">a</span>' +
+				'<span style="color:rgb(255, 0, 0); text-indent: 10px">b</span>'
 			)
 		});
 
-		equal(editor.getContent(), '<p style="color: red;">abc</p>');
+		equal(editor.getContent(), '<p style="color: red;">ab</p>');
 	});
 
 	test('paste webkit remove runtime styles (color) in the same (color) (hex)', function() {
