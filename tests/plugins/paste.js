@@ -203,8 +203,9 @@ test("Paste Word links", function() {
 				'<a href="#_ftn238571849" name="_ftnref238571849">[5]</a>' +
 				'<a href="#_ftnref238571849" name="_ftn238571849">[5]</a>' +
 				'<a href="#_edn238571849" name="_ednref238571849">[6]</a>' +
-				'<a href="#_ednref238571849" name="_edn238571849">[6]</a>' +
-				'<a href="http://www.tinymce.com/someurl">4</a>' +
+				'<a href="#_ednref238571849" name="_edn238571849">[7]</a>' +
+				'<a href="http://www.tinymce.com/someurl">8</a>' +
+				'<a name="#unknown">9</a>' +
 				'<a href="http://www.tinymce.com/someurl" name="named_link">named_link</a>' +
 				'<a>5</a>' +
 			'</p>'
@@ -220,8 +221,9 @@ test("Paste Word links", function() {
 			'<a href="#_ftn238571849" name="_ftnref238571849">[5]</a>' +
 			'<a href="#_ftnref238571849" name="_ftn238571849">[5]</a>' +
 			'<a href="#_edn238571849" name="_ednref238571849">[6]</a>' +
-			'<a href="#_ednref238571849" name="_edn238571849">[6]</a>' +
-			'<a href="http://www.tinymce.com/someurl">4</a>' +
+			'<a href="#_ednref238571849" name="_edn238571849">[7]</a>' +
+			'<a href="http://www.tinymce.com/someurl">8</a>' +
+			'9' +
 			'named_link' +
 			'5' +
 		'</p>'
@@ -503,6 +505,13 @@ if (tinymce.Env.webkit) {
 		equal(editor.getContent(), '<p>abc</p>');
 	});
 
+	test('paste webkit retains text styles runtime styles internal', function() {
+		editor.settings.paste_webkit_styles = 'color';
+		editor.setContent('');
+		editor.execCommand('mceInsertClipboardContent', false, {content: '&lt;span style="color:red"&gt;&lt;span data-mce-style="color:red"&gt;'});
+		equal(editor.getContent(), '<p>&lt;span style="color:red"&gt;&lt;span data-mce-style="color:red"&gt;</p>');
+	});
+
 	test('paste webkit remove runtime styles internal', function() {
 		editor.settings.paste_webkit_styles = 'color';
 		editor.setContent('');
@@ -517,6 +526,24 @@ if (tinymce.Env.webkit) {
 		equal(editor.getContent(), '<p><span style="color: red;">Test</span></p>');
 	});
 
+	test('paste webkit remove runtime styles keep before attr', function() {
+		editor.setContent('');
+		editor.execCommand('mceInsertClipboardContent', false, {content: '<span class="c" style="color:red; text-indent: 10px">Test</span>'});
+		equal(editor.getContent(), '<p><span class="c">Test</span></p>');
+	});
+
+	test('paste webkit remove runtime styles keep after attr', function() {
+		editor.setContent('');
+		editor.execCommand('mceInsertClipboardContent', false, {content: '<span style="color:red; text-indent: 10px" title="t">Test</span>'});
+		equal(editor.getContent(), '<p><span title="t">Test</span></p>');
+	});
+
+	test('paste webkit remove runtime styles keep before/after attr', function() {
+		editor.setContent('');
+		editor.execCommand('mceInsertClipboardContent', false, {content: '<span class="c" style="color:red; text-indent: 10px" title="t">Test</span>'});
+		equal(editor.getContent(), '<p><span class="c" title="t">Test</span></p>');
+	});
+	
 	test('paste webkit remove runtime styles (background-color)', function() {
 		editor.settings.paste_webkit_styles = 'background-color';
 		editor.setContent('');

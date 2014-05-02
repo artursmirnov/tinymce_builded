@@ -1514,7 +1514,7 @@ define("tinymce/tableplugin/Plugin", [
 			each('top middle bottom'.split(' '), function(name) {
 				editor.formatter.remove('valign' + name, {}, elm);
 			});
-		}			
+		}
 
 		function tableDialog() {
 			var dom = editor.dom, tableElm, colsCtrl, rowsCtrl, data;
@@ -1775,8 +1775,7 @@ define("tinymce/tableplugin/Plugin", [
 							unApplyVAlign(cellElm);
 							if (data.valign) {
 								editor.formatter.apply('valign' + data.valign, {}, cellElm);
-							}								
-							
+							}
 						});
 
 						editor.focus();
