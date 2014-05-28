@@ -298,7 +298,9 @@ define("tinymce/dom/DOMUtils", [
 				selectorVal = selector;
 
 				if (selector === '*') {
-					selector = function(node) {return node.nodeType == 1;};
+					selector = function(node) {
+						return node.nodeType == 1;
+					};
 				} else {
 					selector = function(node) {
 						return self.is(node, selectorVal);
@@ -615,7 +617,7 @@ define("tinymce/dom/DOMUtils", [
 						});
 
 						// Default px suffix on these
-						if (typeof(value) === 'number' && !numericCssMap[name]) {
+						if (((typeof(value) === 'number') || /^[\-0-9\.]+$/.test(value)) && !numericCssMap[name]) {
 							value += 'px';
 						}
 
@@ -2041,10 +2043,6 @@ define("tinymce/dom/DOMUtils", [
 		},
 
 		isChildOf: function(node, parent) {
-			if (parent.contains) {
-				return parent.contains(node);
-			}
-
 			while (node) {
 				if (parent === node) {
 					return true;

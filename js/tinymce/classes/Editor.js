@@ -786,7 +786,14 @@ define("tinymce/Editor", [
 					// Add internal attribute if we need to we don't on a refresh of the document
 					if (!node.attributes.map[internalName]) {
 						if (name === "style") {
-							node.attr(internalName, dom.serializeStyle(dom.parseStyle(value), node.name));
+							value = dom.serializeStyle(dom.parseStyle(value), node.name);
+
+							if (!value.length) {
+								value = null;
+							}
+
+							node.attr(internalName, value);
+							node.attr(name, value);
 						} else if (name === "tabindex") {
 							node.attr(internalName, value);
 							node.attr(name, null);
@@ -803,7 +810,7 @@ define("tinymce/Editor", [
 
 				while (i--) {
 					node = nodes[i];
-					node.attr('type', 'mce-' + (node.attr('type') || 'text/javascript'));
+					node.attr('type', 'mce-' + (node.attr('type') || 'no/type'));
 				}
 			});
 
@@ -1417,8 +1424,18 @@ define("tinymce/Editor", [
 			}
 
 			// Browser commands
-			self.getDoc().execCommand(cmd, ui, value);
-			self.fire('ExecCommand', {command: cmd, ui: ui, value: value});
+			try {
+				state = self.getDoc().execCommand(cmd, ui, value);
+			} catch (ex) {
+				// Ignore old IE errors
+			}
+
+			if (state) {
+				self.fire('ExecCommand', {command: cmd, ui: ui, value: value});
+				return true;
+			}
+
+			return false;
 		},
 
 		/**
@@ -1440,8 +1457,8 @@ define("tinymce/Editor", [
 			if ((queryItem = self.queryStateCommands[cmd])) {
 				returnVal = queryItem.func.call(queryItem.scope);
 
-				// Fall though on true
-				if (returnVal !== true) {
+				// Fall though on non boolean returns
+				if (returnVal === true || returnVal === false) {
 					return returnVal;
 				}
 			}
@@ -1531,8 +1548,6 @@ define("tinymce/Editor", [
 			var self = this, doc = self.getDoc();
 
 			if (!self.hidden) {
-				self.hidden = true;
-
 				// Fixed bug where IE has a blinking cursor left from the editor
 				if (ie && doc && !self.inline) {
 					doc.execCommand('SelectAll');
@@ -1553,6 +1568,7 @@ define("tinymce/Editor", [
 					DOM.setStyle(self.id, 'display', self.orgDisplay);
 				}
 
+				self.hidden = true;
 				self.fire('hide');
 			}
 		},
@@ -1816,8 +1832,13 @@ define("tinymce/Editor", [
 		 *
 		 * @method insertContent
 		 * @param {String} content Content to insert.
+		 * @param {Object} args Optional args to pass to insert call.
 		 */
-		insertContent: function(content) {
+		insertContent: function(content, args) {
+			if (args) {
+				content = extend({content: content}, args);
+			}
+
 			this.execCommand('mceInsertContent', false, content);
 		},
 

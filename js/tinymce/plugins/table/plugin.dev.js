@@ -106,8 +106,6 @@
 	exports.define = define;
 	exports.require = require;
 
-	expose(["tinymce/tableplugin/TableGrid","tinymce/tableplugin/Quirks","tinymce/tableplugin/CellSelection","tinymce/tableplugin/Plugin"]);
-
 	load('classes/TableGrid.js');
 	load('classes/Quirks.js');
 	load('classes/CellSelection.js');
@@ -116,4 +114,4 @@
 	writeScripts();
 })(this);
 
-// $hash: 78cfb4e38873515c9e31607a7ae1fa3b
+// $hash: c0f59f7d4bcaff7235f7a88806ffbac5

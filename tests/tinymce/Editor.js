@@ -40,6 +40,12 @@ module("tinymce.Editor", {
 				}
 			}
 		});
+	},
+
+	teardown: function() {
+		Utils.unpatch(editor.getDoc()); 
+		inlineEditor.show();
+		editor.show();
 	}
 });
 
@@ -271,4 +277,48 @@ test('show/hide/isHidden and events (inline)', function() {
 	lastEvent = null;
 	inlineEditor.show();
 	strictEqual(lastEvent, null);
+});
+
+test('hide save content and hidden state while saving', function() {
+	var lastEvent, hiddenStateWhileSaving;
+
+	editor.on('SaveContent', function(e) {
+		lastEvent = e;
+		hiddenStateWhileSaving = editor.isHidden();
+	});
+
+	editor.setContent('xyz');
+	editor.hide();
+
+	strictEqual(hiddenStateWhileSaving, false, 'False isHidden state while saving');
+	strictEqual(lastEvent.content, '<p>xyz</p>');
+	strictEqual(document.getElementById('elm1').value, '<p>xyz</p>');
+});
+
+test('insertContent', function() {
+	editor.setContent('<p>a</p>');
+	Utils.setSelection('p', 1);
+	editor.insertContent('b');
+	equal(editor.getContent(), '<p>ab</p>');
+});
+
+test('insertContent merge', function() {
+	editor.setContent('<p><strong>a</strong></p>');
+	Utils.setSelection('p', 1);
+	editor.insertContent('<em><strong>b</strong></em>', {merge: true});
+	equal(editor.getContent(), '<p><strong>a<em>b</em></strong></p>');
+});
+
+test('execCommand return values for native commands', function() {
+	var lastCmd;
+
+	strictEqual(editor.execCommand("NonExistingCommand"), false, "Return value for a completely unhandled command");
+
+	Utils.patch(editor.getDoc(), 'execCommand', function(orgFunc, cmd, ui, value) {
+		lastCmd = cmd;
+		return true;
+	});
+
+	strictEqual(editor.execCommand("ExistingCommand"), true, "Return value for an editor handled command");
+	strictEqual(lastCmd, "ExistingCommand");
 });
