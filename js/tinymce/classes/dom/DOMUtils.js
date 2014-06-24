@@ -21,6 +21,7 @@
  */
 define("tinymce/dom/DOMUtils", [
 	"tinymce/dom/Sizzle",
+	"tinymce/dom/DomQuery",
 	"tinymce/html/Styles",
 	"tinymce/dom/EventUtils",
 	"tinymce/dom/TreeWalker",
@@ -29,7 +30,7 @@ define("tinymce/dom/DOMUtils", [
 	"tinymce/Env",
 	"tinymce/util/Tools",
 	"tinymce/dom/StyleSheetLoader"
-], function(Sizzle, Styles, EventUtils, TreeWalker, Range, Entities, Env, Tools, StyleSheetLoader) {
+], function(Sizzle, DomQuery, Styles, EventUtils, TreeWalker, Range, Entities, Env, Tools, StyleSheetLoader) {
 	// Shorten names
 	var each = Tools.each, is = Tools.is, grep = Tools.grep, trim = Tools.trim, extend = Tools.extend;
 	var isWebKit = Env.webkit, isIE = Env.ie;
@@ -72,6 +73,12 @@ define("tinymce/dom/DOMUtils", [
 		self.fixDoc(doc);
 		self.events = settings.ownEvents ? new EventUtils(settings.proxy) : EventUtils.Event;
 		blockElementsMap = settings.schema ? settings.schema.getBlockElements() : {};
+		self.$ = DomQuery.overrideDefaults(function() {
+			return {
+				context: doc,
+				element: self.getRoot()
+			};
+		});
 
 		/**
 		 * Returns true/false if the specified element is a block element or not.
@@ -512,7 +519,7 @@ define("tinymce/dom/DOMUtils", [
 			outHtml += '<' + name;
 
 			for (key in attrs) {
-				if (attrs.hasOwnProperty(key) && attrs[key] !== null) {
+				if (attrs.hasOwnProperty(key) && attrs[key] !== null && typeof attrs[key] != 'undefined') {
 					outHtml += ' ' + key + '="' + this.encode(attrs[key]) + '"';
 				}
 			}
@@ -669,7 +676,7 @@ define("tinymce/dom/DOMUtils", [
 			// W3C
 			if (this.doc.defaultView && computed) {
 				// Remove camelcase
-				name = name.replace(/[A-Z]/g, function(a){
+				name = name.replace(/[A-Z]/g, function(a) {
 					return '-' + a;
 				});
 
@@ -748,70 +755,72 @@ define("tinymce/dom/DOMUtils", [
 		 * // Sets class attribute on a specific element in the current page
 		 * tinymce.dom.setAttrib('mydiv', 'class', 'myclass');
 		 */
-		setAttrib: function(e, n, v) {
+		setAttrib: function(elm, name, value) {
 			var self = this;
 
 			// What's the point
-			if (!e || !n) {
+			if (!elm || !name) {
 				return;
 			}
 
-			return this.run(e, function(e) {
-				var s = self.settings;
-				var originalValue = e.getAttribute(n);
-				if (v !== null) {
-					switch (n) {
+			return this.run(elm, function(elm) {
+				var settings = self.settings;
+				var originalValue = elm.getAttribute(name);
+
+				if (value !== null) {
+					switch (name) {
 						case "style":
-							if (!is(v, 'string')) {
-								each(v, function(v, n) {
-									self.setStyle(e, n, v);
+							if (!is(value, 'string')) {
+								each(value, function(value, name) {
+									self.setStyle(elm, name, value);
 								});
 
 								return;
 							}
 
 							// No mce_style for elements with these since they might get resized by the user
-							if (s.keep_values) {
-								if (v) {
-									e.setAttribute('data-mce-style', v, 2);
+							if (settings.keep_values) {
+								if (value) {
+									elm.setAttribute('data-mce-style', value, 2);
 								} else {
-									e.removeAttribute('data-mce-style', 2);
+									elm.removeAttribute('data-mce-style', 2);
 								}
 							}
 
-							e.style.cssText = v;
+							elm.style.cssText = value;
 							break;
 
 						case "class":
-							e.className = v || ''; // Fix IE null bug
+							elm.className = value || ''; // Fix IE null bug
 							break;
 
 						case "src":
 						case "href":
-							if (s.keep_values) {
-								if (s.url_converter) {
-									v = s.url_converter.call(s.url_converter_scope || self, v, n, e);
+							if (settings.keep_values) {
+								if (settings.url_converter) {
+									value = settings.url_converter.call(settings.url_converter_scope || self, value, name, elm);
 								}
 
-								self.setAttrib(e, 'data-mce-' + n, v, 2);
+								self.setAttrib(elm, 'data-mce-' + name, value, 2);
 							}
 
 							break;
 
 						case "shape":
-							e.setAttribute('data-mce-style', v);
+							elm.setAttribute('data-mce-style', value);
 							break;
 					}
 				}
-				if (is(v) && v !== null && v.length !== 0) {
-					e.setAttribute(n, '' + v, 2);
+
+				if (is(value) && value !== null && value.length !== 0) {
+					elm.setAttribute(name, '' + value, 2);
 				} else {
-					e.removeAttribute(n, 2);
+					elm.removeAttribute(name, 2);
 				}
 
 				// fire onChangeAttrib event for attributes that have changed
-				if (originalValue != v && s.onSetAttrib) {
-					s.onSetAttrib({attrElm: e, attrName: n, attrValue: v});
+				if (originalValue != value && settings.onSetAttrib) {
+					settings.onSetAttrib({attrElm: elm, attrName: name, attrValue: value});
 				}
 			});
 		},

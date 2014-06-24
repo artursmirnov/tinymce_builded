@@ -42,6 +42,7 @@
  */
 define("tinymce/Editor", [
 	"tinymce/dom/DOMUtils",
+	"tinymce/dom/DomQuery",
 	"tinymce/AddOnManager",
 	"tinymce/html/Node",
 	"tinymce/dom/Serializer",
@@ -64,7 +65,7 @@ define("tinymce/Editor", [
 	"tinymce/EditorObservable",
 	"tinymce/Shortcuts"
 ], function(
-	DOMUtils, AddOnManager, Node, DomSerializer, Serializer,
+	DOMUtils, DomQuery, AddOnManager, Node, DomSerializer, Serializer,
 	Selection, Formatter, UndoManager, EnterKey, ForceBlocks, EditorCommands,
 	URI, ScriptLoader, EventUtils, WindowManager,
 	Schema, DomParser, Quirks, Env, Tools, EditorObservable, Shortcuts
@@ -250,6 +251,22 @@ define("tinymce/Editor", [
 		// Call setup
 		editorManager.fire('SetupEditor', self);
 		self.execCallback('setup', self);
+
+		/**
+		 * Dom query instance with default scope to the editor document and default element is the body of the editor.
+		 *
+		 * @property $
+		 * @type tinymce.dom.DomQuery
+		 * @example
+		 * tinymce.activeEditor.$('p').css('color', 'red');
+		 * tinymce.activeEditor.$().append('<p>new</p>');
+		 */
+		self.$ = DomQuery.overrideDefaults(function() {
+			return {
+				context: self.inline ? self.getBody() : self.getDoc(),
+				element: self.getBody()
+			};
+		});
 	}
 
 	Editor.prototype = {
@@ -416,9 +433,9 @@ define("tinymce/Editor", [
 
 							each(dependencies, function(dep) {
 								var defaultSettings = {
-									prefix:'plugins/',
+									prefix: 'plugins/',
 									resource: dep,
-									suffix:'/plugin' + suffix + '.js'
+									suffix: '/plugin' + suffix + '.js'
 								};
 
 								dep = PluginManager.createUrl(defaultSettings, dep);
@@ -476,7 +493,7 @@ define("tinymce/Editor", [
 					self.theme = new Theme(self, ThemeManager.urls[settings.theme]);
 
 					if (self.theme.init) {
-						self.theme.init(self, ThemeManager.urls[settings.theme] || self.documentBaseUrl.replace(/\/$/, ''));
+						self.theme.init(self, ThemeManager.urls[settings.theme] || self.documentBaseUrl.replace(/\/$/, ''), self.$);
 					}
 				} else {
 					self.theme = settings.theme;
@@ -489,11 +506,11 @@ define("tinymce/Editor", [
 				pluginUrl = PluginManager.urls[plugin] || self.documentBaseUrl.replace(/\/$/, '');
 				plugin = trim(plugin);
 				if (Plugin && inArray(initializedPlugins, plugin) === -1) {
-					each(PluginManager.dependencies(plugin), function(dep){
+					each(PluginManager.dependencies(plugin), function(dep) {
 						initPlugin(dep);
 					});
 
-					pluginInstance = new Plugin(self, pluginUrl);
+					pluginInstance = new Plugin(self, pluginUrl, self.$);
 
 					self.plugins[plugin] = pluginInstance;
 
@@ -970,7 +987,7 @@ define("tinymce/Editor", [
 
 			// Handle auto focus
 			if (settings.auto_focus) {
-				setTimeout(function () {
+				setTimeout(function() {
 					var ed = self.editorManager.get(settings.auto_focus);
 
 					ed.selection.select(ed.getBody(), 1);
@@ -1169,8 +1186,9 @@ define("tinymce/Editor", [
 		 * need to update the UI states or element path etc.
 		 *
 		 * @method nodeChanged
+		 * @param {Object} args Optional args to pass to NodeChange event handlers.
 		 */
-		nodeChanged: function() {
+		nodeChanged: function(args) {
 			var self = this, selection = self.selection, node, parents, root;
 
 			// Fix for bug #1896577 it seems that this can not be fired while the editor is loading
@@ -1195,7 +1213,11 @@ define("tinymce/Editor", [
 					parents.push(node);
 				});
 
-				self.fire('NodeChange', {element: node, parents: parents});
+				args = args || {};
+				args.element = node;
+				args.parents = parents;
+
+				self.fire('NodeChange', args);
 			}
 		},
 
@@ -1594,10 +1616,10 @@ define("tinymce/Editor", [
 		 * @example
 		 * // Show progress for the active editor
 		 * tinymce.activeEditor.setProgressState(true);
-		 * 
+		 *
 		 * // Hide progress for the active editor
 		 * tinymce.activeEditor.setProgressState(false);
-		 * 
+		 *
 		 * // Show progress after 3 seconds
 		 * tinymce.activeEditor.setProgressState(true, 3000);
 		 */
@@ -2041,8 +2063,8 @@ define("tinymce/Editor", [
 			var self = this;
 
 			if (!self.removed) {
-				self.removed = 1;
 				self.save();
+				self.removed = 1;
 
 				// Remove any hidden input
 				if (self.hasHiddenInput) {

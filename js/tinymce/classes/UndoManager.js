@@ -15,22 +15,53 @@
  */
 define("tinymce/UndoManager", [
 	"tinymce/Env",
-	"tinymce/util/Tools"
-], function(Env, Tools) {
+	"tinymce/util/Tools",
+	"tinymce/html/SaxParser"
+], function(Env, Tools, SaxParser) {
 	var trim = Tools.trim, trimContentRegExp;
 
 	trimContentRegExp = new RegExp([
 		'<span[^>]+data-mce-bogus[^>]+>[\u200B\uFEFF]+<\\/span>', // Trim bogus spans like caret containers
-		'<div[^>]+data-mce-bogus[^>]+><\\/div>', // Trim bogus divs like resize handles
 		'\\s?data-mce-selected="[^"]+"' // Trim temporaty data-mce prefixed attributes like data-mce-selected
 	].join('|'), 'gi');
 
 	return function(editor) {
 		var self = this, index = 0, data = [], beforeBookmark, isFirstTypedCharacter, locks = 0;
 
-		// Returns a trimmed version of the current editor contents
+		/**
+		 * Returns a trimmed version of the editor contents to be used for the undo level. This
+		 * will remove any data-mce-bogus="all" marked elements since these are used for UI it will also
+		 * remove the data-mce-selected attributes used for selection of objects and caret containers.
+		 * It will keep all data-mce-bogus="1" elements since these can be used to place the caret etc and will
+		 * be removed by the serialization logic when you save.
+		 *
+		 * @private
+		 * @return {String} HTML contents of the editor excluding some internal bogus elements.
+		 */
 		function getContent() {
-			return trim(editor.getContent({format: 'raw', no_events: 1}).replace(trimContentRegExp, ''));
+			var content = trim(editor.getContent({format: 'raw', no_events: 1}));
+			var bogusAllRegExp = /<(\w+) [^>]*data-mce-bogus="all"[^>]*>/g;
+			var endTagIndex, index, matchLength, matches, shortEndedElements, schema = editor.schema;
+
+			content = content.replace(trimContentRegExp, '');
+			shortEndedElements = schema.getShortEndedElements();
+
+			// Remove all bogus elements marked with "all"
+			while ((matches = bogusAllRegExp.exec(content))) {
+				index = bogusAllRegExp.lastIndex;
+				matchLength = matches[0].length;
+
+				if (shortEndedElements[matches[1]]) {
+					endTagIndex = index;
+				} else {
+					endTagIndex = SaxParser.findEndTag(schema, content, index);
+				}
+
+				content = content.substring(0, index - matchLength) + content.substring(endTagIndex);
+				bogusAllRegExp.lastIndex = index - matchLength;
+			}
+
+			return content;
 		}
 
 		function addNonTypingUndoLevel(e) {
@@ -129,11 +160,43 @@ define("tinymce/UndoManager", [
 		editor.addShortcut('ctrl+z', '', 'Undo');
 		editor.addShortcut('ctrl+y,ctrl+shift+z', '', 'Redo');
 
-		editor.on('AddUndo Undo Redo ClearUndos MouseUp', function(e) {
+		editor.on('AddUndo Undo Redo ClearUndos', function(e) {
 			if (!e.isDefaultPrevented()) {
 				editor.nodeChanged();
 			}
 		});
+
+		// Selection range isn't updated until after the click events default handler is executed
+		// so we need to wait for the selection to update on Gecko/WebKit it happens right away.
+		// On IE it might take a while so we listen for the SelectionChange event.
+		//
+		// We can't use the SelectionChange on all browsers event since Gecko doesn't support that.
+		if (Env.ie) {
+			editor.on('MouseUp', function(e) {
+				if (!e.isDefaultPrevented()) {
+					editor.once('SelectionChange', function() {
+						// Selection change might fire when focus is lost
+						if (editor.dom.isChildOf(editor.selection.getStart(), editor.getBody())) {
+							editor.nodeChanged();
+						}
+					});
+
+					editor.nodeChanged();
+				}
+			});
+		} else {
+			editor.on('MouseUp', function() {
+				editor.nodeChanged();
+			});
+
+			editor.on('Click', function(e) {
+				if (!e.isDefaultPrevented()) {
+					setTimeout(function() {
+						editor.nodeChanged();
+					}, 0);
+				}
+			});
+		}
 
 		self = {
 			// Explose for debugging reasons
