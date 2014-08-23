@@ -121,6 +121,8 @@
 	load('classes/dom/DOMUtils.js');
 	load('classes/dom/ScriptLoader.js');
 	load('classes/AddOnManager.js');
+	load('classes/dom/RangeUtils.js');
+	load('classes/NodeChange.js');
 	load('classes/html/Node.js');
 	load('classes/html/Schema.js');
 	load('classes/html/SaxParser.js');
@@ -131,7 +133,6 @@
 	load('classes/dom/TridentSelection.js');
 	load('classes/util/VK.js');
 	load('classes/dom/ControlSelection.js');
-	load('classes/dom/RangeUtils.js');
 	load('classes/dom/BookmarkManager.js');
 	load('classes/dom/Selection.js');
 	load('classes/dom/ElementUtils.js');
@@ -219,4 +220,4 @@
 	writeScripts();
 })(this);
 
-// $hash: bd80412213448587792012ca545c999c
+// $hash: 0653e3cd1fc49d631de72c9671f8bedf
