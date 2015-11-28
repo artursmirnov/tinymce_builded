@@ -20,11 +20,14 @@ define("tinymce/util/Quirks", [
 	"tinymce/util/VK",
 	"tinymce/dom/RangeUtils",
 	"tinymce/dom/TreeWalker",
+	"tinymce/dom/NodePath",
 	"tinymce/html/Node",
 	"tinymce/html/Entities",
 	"tinymce/Env",
-	"tinymce/util/Tools"
-], function(VK, RangeUtils, TreeWalker, Node, Entities, Env, Tools) {
+	"tinymce/util/Tools",
+	"tinymce/util/Delay",
+	"tinymce/caret/CaretContainer"
+], function(VK, RangeUtils, TreeWalker, NodePath, Node, Entities, Env, Tools, Delay, CaretContainer) {
 	return function(editor) {
 		var each = Tools.each, $ = editor.$;
 		var BACKSPACE = VK.BACKSPACE, DELETE = VK.DELETE, dom = editor.dom, selection = editor.selection,
@@ -403,6 +406,111 @@ define("tinymce/util/Quirks", [
 				}
 			}
 
+			/**
+			 * This retains the formatting if the last character is to be deleted.
+			 *
+			 * Backspace on this: <p><b><i>a|</i></b></p> would become <p>|</p> in WebKit.
+			 * With this patch: <p><b><i>|<br></i></b></p>
+			 */
+			function handleLastBlockCharacterDelete(isForward, rng) {
+				var path, blockElm, newBlockElm, clonedBlockElm, sibling,
+					container, offset, br, currentFormatNodes;
+
+				function cloneTextBlockWithFormats(blockElm, node) {
+					currentFormatNodes = $(node).parents().filter(function(idx, node) {
+						return !!editor.schema.getTextInlineElements()[node.nodeName];
+					});
+
+					newBlockElm = blockElm.cloneNode(false);
+
+					currentFormatNodes = Tools.map(currentFormatNodes, function(formatNode) {
+						formatNode = formatNode.cloneNode(false);
+
+						if (newBlockElm.hasChildNodes()) {
+							formatNode.appendChild(newBlockElm.firstChild);
+							newBlockElm.appendChild(formatNode);
+						} else {
+							newBlockElm.appendChild(formatNode);
+						}
+
+						newBlockElm.appendChild(formatNode);
+
+						return formatNode;
+					});
+
+					if (currentFormatNodes.length) {
+						br = dom.create('br');
+						currentFormatNodes[0].appendChild(br);
+						dom.replace(newBlockElm, blockElm);
+
+						rng.setStartBefore(br);
+						rng.setEndBefore(br);
+						editor.selection.setRng(rng);
+
+						return br;
+					}
+
+					return null;
+				}
+
+				function isTextBlock(node) {
+					return node && editor.schema.getTextBlockElements()[node.tagName];
+				}
+
+				if (!rng.collapsed) {
+					return;
+				}
+
+				container = rng.startContainer;
+				offset = rng.startOffset;
+				blockElm = dom.getParent(container, dom.isBlock);
+				if (!isTextBlock(blockElm)) {
+					return;
+				}
+
+				if (container.nodeType == 1) {
+					container = container.childNodes[offset];
+					if (container && container.tagName != 'BR') {
+						return;
+					}
+
+					if (isForward) {
+						sibling = blockElm.nextSibling;
+					} else {
+						sibling = blockElm.previousSibling;
+					}
+
+					if (dom.isEmpty(blockElm) && isTextBlock(sibling) && dom.isEmpty(sibling)) {
+						if (cloneTextBlockWithFormats(blockElm, container)) {
+							dom.remove(sibling);
+							return true;
+						}
+					}
+				} else if (container.nodeType == 3) {
+					path = NodePath.create(blockElm, container);
+					clonedBlockElm = blockElm.cloneNode(true);
+					container = NodePath.resolve(clonedBlockElm, path);
+
+					if (isForward) {
+						if (offset >= container.data.length) {
+							return;
+						}
+
+						container.deleteData(offset, 1);
+					} else {
+						if (offset <= 0) {
+							return;
+						}
+
+						container.deleteData(offset - 1, 1);
+					}
+
+					if (dom.isEmpty(clonedBlockElm)) {
+						return cloneTextBlockWithFormats(blockElm, container);
+					}
+				}
+			}
+
 			function customDelete(isForward) {
 				var mutationObserver, rng, caretElement;
 
@@ -492,6 +600,11 @@ define("tinymce/util/Quirks", [
 						return;
 					}
 
+					if (handleLastBlockCharacterDelete(isForward, rng)) {
+						e.preventDefault();
+						return;
+					}
+
 					// Ignore non meta delete in the where there is text before/after the caret
 					if (!isMetaOrCtrl && rng.collapsed && container.nodeType == 3) {
 						if (isForward ? offset < container.data.length : offset > 0) {
@@ -511,7 +624,7 @@ define("tinymce/util/Quirks", [
 
 			// Handle case where text is deleted by typing over
 			editor.on('keypress', function(e) {
-				if (!isDefaultPrevented(e) && !selection.isCollapsed() && e.charCode && !VK.metaKeyPressed(e)) {
+				if (!isDefaultPrevented(e) && !selection.isCollapsed() && e.charCode > 31 && !VK.metaKeyPressed(e)) {
 					var rng, currentFormatNodes, fragmentNode, blockParent, caretNode, charText;
 
 					rng = editor.selection.getRng();
@@ -596,7 +709,7 @@ define("tinymce/util/Quirks", [
 						// produces a green plus icon. When this happens the caretRangeFromPoint
 						// will return "null" even though the x, y coordinate is correct.
 						// But if we detach the insert from the drop event we will get a proper range
-						window.setTimeout(function() {
+						Delay.setEditorTimeout(editor, function() {
 							var pointRng = RangeUtils.getCaretRangeFromPoint(e.x, e.y, doc);
 
 							if (dragStartRng) {
@@ -607,7 +720,7 @@ define("tinymce/util/Quirks", [
 							customDelete();
 							selection.setRng(pointRng);
 							insertClipboardContents(internalContent.html);
-						}, 0);
+						});
 					}
 				}
 			});
@@ -622,9 +735,9 @@ define("tinymce/util/Quirks", [
 					// Needed delay for https://code.google.com/p/chromium/issues/detail?id=363288#c3
 					// Nested delete/forwardDelete not allowed on execCommand("cut")
 					// This is ugly but not sure how to work around it otherwise
-					window.setTimeout(function() {
+					Delay.setEditorTimeout(editor, function() {
 						customDelete(true);
-					}, 0);
+					});
 				}
 			});
 		}
@@ -725,21 +838,30 @@ define("tinymce/util/Quirks", [
 		function inputMethodFocus() {
 			if (!editor.settings.content_editable) {
 				// Case 1 IME doesn't initialize if you focus the document
-				dom.bind(editor.getDoc(), 'focusin', function() {
+				// Disabled since it was interferring with the cE=false logic
+				// Also coultn't reproduce the issue on Safari 9
+				/*dom.bind(editor.getDoc(), 'focusin', function() {
 					selection.setRng(selection.getRng());
-				});
+				});*/
 
 				// Case 2 IME doesn't initialize if you click the documentElement it also doesn't properly fire the focusin event
 				// Needs to be both down/up due to weird rendering bug on Chrome Windows
 				dom.bind(editor.getDoc(), 'mousedown mouseup', function(e) {
+					var rng;
+
 					if (e.target == editor.getDoc().documentElement) {
+						rng = selection.getRng();
 						editor.getBody().focus();
 
 						if (e.type == 'mousedown') {
+							if (CaretContainer.isCaretContainer(rng.startContainer)) {
+								return;
+							}
+
 							// Edge case for mousedown, drag select and mousedown again within selection on Chrome Windows to render caret
 							selection.placeCaretAt(e.clientX, e.clientY);
 						} else {
-							selection.setRng(selection.getRng());
+							selection.setRng(rng);
 						}
 					}
 				});
@@ -798,9 +920,9 @@ define("tinymce/util/Quirks", [
 						body.blur();
 
 						// Refocus the body after a little while
-						setTimeout(function() {
+						Delay.setEditorTimeout(editor, function() {
 							body.focus();
-						}, 0);
+						});
 					}
 				});
 			}
@@ -817,7 +939,7 @@ define("tinymce/util/Quirks", [
 				// Workaround for bug, http://bugs.webkit.org/show_bug.cgi?id=12250
 				// WebKit can't even do simple things like selecting an image
 				// Needs to be the setBaseAndExtend or it will fail to select floated images
-				if (/^(IMG|HR)$/.test(target.nodeName)) {
+				if (/^(IMG|HR)$/.test(target.nodeName) && dom.getContentEditableParent(target) !== "false") {
 					e.preventDefault();
 					selection.getSel().setBaseAndExtent(target, 0, target, 1);
 					editor.nodeChanged();
@@ -882,9 +1004,9 @@ define("tinymce/util/Quirks", [
 				if (!isDefaultPrevented(e) && isSelectionAcrossElements()) {
 					applyAttributes = getAttributeApplyFunction();
 
-					setTimeout(function() {
+					Delay.setEditorTimeout(editor, function() {
 						applyAttributes();
-					}, 0);
+					});
 				}
 			});
 		}
@@ -1105,17 +1227,6 @@ define("tinymce/util/Quirks", [
 					setEditorCommandState('DefaultParagraphSeparator', settings.forced_root_block);
 				});
 			}
-		}
-
-		/**
-		 * Removes ghost selections from images/tables on Gecko.
-		 */
-		function removeGhostSelection() {
-			editor.on('Undo Redo SetContent', function(e) {
-				if (!e.initial) {
-					editor.execCommand('mceRepaint');
-				}
-			});
 		}
 
 		/**
@@ -1577,7 +1688,6 @@ define("tinymce/util/Quirks", [
 			removeStylesWhenDeletingAcrossBlockElements();
 			setGeckoEditingOptions();
 			addBrAfterLastLinks();
-			removeGhostSelection();
 			showBrokenImageIcon();
 			blockCmdArrowNavigation();
 			disableBackspaceIntoATable();

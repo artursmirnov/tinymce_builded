@@ -133,9 +133,10 @@
 	load('classes/Quirks.js');
 	load('classes/CellSelection.js');
 	load('classes/Dialogs.js');
+	load('classes/ResizeBars.js');
 	load('classes/Plugin.js');
 
 	writeScripts();
 })(this);
 
-// $hash: 89b06b4fd9525fcda41462475e8e8f54
+// $hash: bf8e84ad8b71c4902cca7ad5edf6ce08

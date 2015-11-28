@@ -22,7 +22,9 @@ module.exports = function(grunt) {
 				"!js/tinymce/plugins/paste/plugin.js",
 				"!js/tinymce/plugins/table/plugin.js",
 				"!js/tinymce/plugins/spellchecker/plugin.js",
-				"!js/tinymce/plugins/imagetools/plugin.js"
+				"!js/tinymce/plugins/imagetools/plugin.js",
+				"!js/tinymce/plugins/codesample/plugin.js",
+				"!js/tinymce/plugins/codesample/classes/Prism.js"
 			],
 
 			themes: ["js/tinymce/themes/*/theme.js"]
@@ -41,7 +43,9 @@ module.exports = function(grunt) {
 				"!js/tinymce/plugins/paste/plugin.js",
 				"!js/tinymce/plugins/table/plugin.js",
 				"!js/tinymce/plugins/spellchecker/plugin.js",
-				"!js/tinymce/plugins/imagetools/plugin.js"
+				"!js/tinymce/plugins/imagetools/plugin.js",
+				"!js/tinymce/plugins/codesample/plugin.js",
+				"!js/tinymce/plugins/codesample/classes/Prism.js"
 			],
 
 			themes: ["js/tinymce/themes/*/theme.js"]
@@ -72,6 +76,7 @@ module.exports = function(grunt) {
 					compress: true,
 
 					from: [
+						"geom/Rect.js",
 						"dom/DomQuery.js",
 						"EditorManager.js",
 						"LegacyInput.js",
@@ -102,6 +107,7 @@ module.exports = function(grunt) {
 					compress: true,
 
 					from: [
+						"geom/Rect.js",
 						"dom/DomQuery.js",
 						"EditorManager.js",
 						"LegacyInput.js",
@@ -173,6 +179,21 @@ module.exports = function(grunt) {
 
 					from: "Plugin.js"
 				}
+			},
+
+			"codesample-plugin": {
+				options: {
+					baseDir: "js/tinymce/plugins/codesample/classes",
+					rootNS: "tinymce.codesampleplugin",
+					outputSource: "js/tinymce/plugins/codesample/plugin.js",
+					outputMinified: "js/tinymce/plugins/codesample/plugin.min.js",
+					outputDev: "js/tinymce/plugins/codesample/plugin.dev.js",
+					verbose: false,
+					expose: "public",
+					compress: true,
+
+					from: "Plugin.js"
+				}
 			}
 		},
 
@@ -220,7 +241,8 @@ module.exports = function(grunt) {
 			modern: {
 				options: {
 					cleancss: true,
-					strictImports: true
+					strictImports: true,
+					compress: true
 				},
 
 				expand: true,
@@ -243,7 +265,8 @@ module.exports = function(grunt) {
 			content: {
 				options: {
 					cleancss: true,
-					strictImports: true
+					strictImports: true,
+					compress: true
 				},
 
 				rename: function(dest, src) {
@@ -681,7 +704,7 @@ module.exports = function(grunt) {
 			plugins: {
 				files: ["js/tinymce/plugins/**/*.js"],
 				tasks: [
-					"amdlc:paste-plugin", "amdlc:imagetools-plugin",
+					"amdlc:paste-plugin", "amdlc:imagetools-plugin", "amdlc:codesample-plugin",
 					"amdlc:table-plugin", "amdlc:spellchecker-plugin", "uglify:plugins",
 					"eslint:plugins", "jscs:plugins"
 				],
