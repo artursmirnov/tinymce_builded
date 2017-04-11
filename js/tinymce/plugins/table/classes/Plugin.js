@@ -189,14 +189,14 @@ define("tinymce/tableplugin/Plugin", [
 
 		if (editor.settings.table_grid === false) {
 			editor.addMenuItem('inserttable', {
-				text: 'Insert table',
+				text: 'Table',
 				icon: 'table',
 				context: 'table',
 				onclick: dialogs.table
 			});
 		} else {
 			editor.addMenuItem('inserttable', {
-				text: 'Insert table',
+				text: 'Table',
 				icon: 'table',
 				context: 'table',
 				ariaHideMenu: true,
@@ -346,7 +346,7 @@ define("tinymce/tableplugin/Plugin", [
 
 		editor.on('Init', function() {
 			self.cellSelection = new CellSelection(editor, function (selecting) {
-				if (selecting) {
+				if (selecting && resizeBars) {
 					resizeBars.clearBars();
 				}
 			});
@@ -386,19 +386,19 @@ define("tinymce/tableplugin/Plugin", [
 			},
 
 			mceTableInsertRowBefore: function(grid) {
-				grid.insertRow(true);
+				grid.insertRows(true);
 			},
 
 			mceTableInsertRowAfter: function(grid) {
-				grid.insertRow();
+				grid.insertRows();
 			},
 
 			mceTableInsertColBefore: function(grid) {
-				grid.insertCol(true);
+				grid.insertCols(true);
 			},
 
 			mceTableInsertColAfter: function(grid) {
-				grid.insertCol();
+				grid.insertCols();
 			},
 
 			mceTableDeleteCol: function(grid) {

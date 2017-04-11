@@ -174,6 +174,9 @@
 	load('classes/fmt/Preview.js');
 	load('classes/fmt/Hooks.js');
 	load('classes/Formatter.js');
+	load('classes/undo/Diff.js');
+	load('classes/undo/Fragments.js');
+	load('classes/undo/Levels.js');
 	load('classes/UndoManager.js');
 	load('classes/EnterKey.js');
 	load('classes/ForceBlocks.js');
@@ -222,6 +225,7 @@
 	load('classes/file/ImageScanner.js');
 	load('classes/file/BlobCache.js');
 	load('classes/file/UploadStatus.js');
+	load('classes/ErrorReporter.js');
 	load('classes/EditorUpload.js');
 	load('classes/caret/FakeCaret.js');
 	load('classes/dom/Dimensions.js');
@@ -231,6 +235,7 @@
 	load('classes/DragDropOverrides.js');
 	load('classes/SelectionOverrides.js');
 	load('classes/util/Uuid.js');
+	load('classes/ui/Sidebar.js');
 	load('classes/Editor.js');
 	load('classes/util/I18n.js');
 	load('classes/FocusManager.js');
@@ -258,10 +263,12 @@
 	load('classes/ui/FormItem.js');
 	load('classes/ui/Form.js');
 	load('classes/ui/FieldSet.js');
+	load('classes/content/LinkTargets.js');
 	load('classes/ui/FilePicker.js');
 	load('classes/ui/FitLayout.js');
 	load('classes/ui/FlexLayout.js');
 	load('classes/ui/FlowLayout.js');
+	load('classes/fmt/FontInfo.js');
 	load('classes/ui/FormatControls.js');
 	load('classes/ui/GridLayout.js');
 	load('classes/ui/Iframe.js');
@@ -288,4 +295,4 @@
 	writeScripts();
 })(this);
 
-// $hash: 2f3a9f50afdf4759aed62eb2cc83a81e
+// $hash: 9e53773d4fa5cccfbfa5738fb9c2ac6c
