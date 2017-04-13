@@ -1,6 +1,6 @@
 {
 	"name": "tinymce",
-	"version": "4.0.0",
+	"version": "4.5.6",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/tinymce/tinymce.git"
@@ -10,7 +10,6 @@
 	"bugs": {
 		"url": "http://www.tinymce.com/develop/bugtracker.php"
 	},
-	"private": true,
 	"engines": {
 		"node": ">=0.10.26"
 	},
