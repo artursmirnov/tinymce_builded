@@ -37,11 +37,10 @@ define("tinymce/SelectionOverrides", [
 	"tinymce/util/Fun",
 	"tinymce/util/Arr",
 	"tinymce/util/Delay",
-	"tinymce/DragDropOverrides",
-	"tinymce/text/Zwsp"
+	"tinymce/DragDropOverrides"
 ], function(
 	Env, CaretWalker, CaretPosition, CaretContainer, CaretUtils, FakeCaret, LineWalker,
-	LineUtils, NodeType, RangeUtils, ClientRect, VK, Fun, Arr, Delay, DragDropOverrides, Zwsp
+	LineUtils, NodeType, RangeUtils, ClientRect, VK, Fun, Arr, Delay, DragDropOverrides
 ) {
 	var curry = Fun.curry,
 		isContentEditableTrue = NodeType.isContentEditableTrue,
@@ -68,6 +67,10 @@ define("tinymce/SelectionOverrides", [
 			fakeCaret = new FakeCaret(editor.getBody(), isBlock),
 			realSelectionId = 'sel-' + editor.dom.uniqueId(),
 			selectedContentEditableNode, $ = editor.$;
+
+		function isFakeSelectionElement(elm) {
+			return editor.dom.hasClass(elm, 'mce-offscreen-selection');
+		}
 
 		function getRealSelectionElement() {
 			var container = editor.dom.get(realSelectionId);
@@ -113,8 +116,6 @@ define("tinymce/SelectionOverrides", [
 
 		function selectNode(node) {
 			var e;
-
-			fakeCaret.hide();
 
 			e = editor.fire('BeforeObjectSelected', {target: node});
 			if (e.isDefaultPrevented()) {
@@ -329,16 +330,9 @@ define("tinymce/SelectionOverrides", [
 		}
 
 		function showBlockCaretContainer(blockCaretContainer) {
-			blockCaretContainer = $(blockCaretContainer);
-
-			if (blockCaretContainer.attr('data-mce-caret')) {
-				fakeCaret.hide();
-				blockCaretContainer.removeAttr('data-mce-caret');
-				blockCaretContainer.removeAttr('data-mce-bogus');
-				blockCaretContainer.removeAttr('style');
-
-				// Removes control rect on IE
-				setRange(getRange());
+			if (blockCaretContainer.hasAttribute('data-mce-caret')) {
+				CaretContainer.showCaretContainerBlock(blockCaretContainer);
+				setRange(getRange()); // Removes control rect on IE
 				scrollIntoView(blockCaretContainer[0]);
 			}
 		}
@@ -362,8 +356,6 @@ define("tinymce/SelectionOverrides", [
 			if (isContentEditableFalse(ceRoot)) {
 				return showCaret(1, ceRoot, false);
 			}
-
-			fakeCaret.hide();
 
 			return null;
 		}
@@ -406,7 +398,6 @@ define("tinymce/SelectionOverrides", [
 			CaretContainer.remove(node.previousSibling);
 			CaretContainer.remove(node.nextSibling);
 			editor.dom.remove(node);
-			clearContentEditableSelection();
 
 			if (editor.dom.isEmpty(editor.getBody())) {
 				editor.setContent('');
@@ -575,14 +566,26 @@ define("tinymce/SelectionOverrides", [
 			editor.on('click', function(e) {
 				var contentEditableRoot;
 
-				// Prevent clicks on links in a cE=false element
 				contentEditableRoot	= getContentEditableRoot(e.target);
 				if (contentEditableRoot) {
+					// Prevent clicks on links in a cE=false element
 					if (isContentEditableFalse(contentEditableRoot)) {
 						e.preventDefault();
 						editor.focus();
 					}
+
+					// Removes fake selection if a cE=true is clicked within a cE=false like the toc title
+					if (isContentEditableTrue(contentEditableRoot)) {
+						if (editor.dom.isChildOf(contentEditableRoot, editor.selection.getNode())) {
+							removeContentEditableSelection();
+						}
+					}
 				}
+			});
+
+			editor.on('blur NewBlock', function () {
+				removeContentEditableSelection();
+				hideFakeCaret();
 			});
 
 			function handleTouchSelect(editor) {
@@ -604,8 +607,6 @@ define("tinymce/SelectionOverrides", [
 							e.preventDefault();
 							setContentEditableSelection(selectNode(contentEditableRoot));
 						}
-					} else {
-						clearContentEditableSelection();
 					}
 				});
 			}
@@ -629,6 +630,14 @@ define("tinymce/SelectionOverrides", [
 				return block1 === block2;
 			};
 
+			var isContentKey = function (e) {
+				if (e.keyCode >= 112 && e.keyCode <= 123) {
+					return false;
+				}
+
+				return true;
+			};
+
 			// Checks if the target node is in a block and if that block has a caret position better than the
 			// suggested caretNode this is to prevent the caret from being sucked in towards a cE=false block if
 			// they are adjacent on the vertical axis
@@ -650,15 +659,15 @@ define("tinymce/SelectionOverrides", [
 						e.preventDefault();
 						setContentEditableSelection(selectNode(contentEditableRoot));
 					} else {
-						clearContentEditableSelection();
-
 						if (!isXYWithinRange(e.clientX, e.clientY, editor.selection.getRng())) {
 							editor.selection.placeCaretAt(e.clientX, e.clientY);
 						}
 					}
 				} else {
-					clearContentEditableSelection();
-					fakeCaret.hide();
+					// Remove needs to be called here since the mousedown might alter the selection without calling selection.setRng
+					// and therefore not fire the AfterSetSelectionRange event.
+					removeContentEditableSelection();
+					hideFakeCaret();
 
 					var caretInfo = LineUtils.closestCaret(rootNode, e.clientX, e.clientY);
 					if (caretInfo) {
@@ -702,7 +711,7 @@ define("tinymce/SelectionOverrides", [
 						break;
 
 					default:
-						if (isContentEditableFalse(editor.selection.getNode())) {
+						if (isContentEditableFalse(editor.selection.getNode()) && isContentKey(e)) {
 							e.preventDefault();
 						}
 						break;
@@ -733,7 +742,7 @@ define("tinymce/SelectionOverrides", [
 					return;
 				}
 
-				if (blockCaretContainer.innerHTML != '&nbsp;') {
+				if (CaretContainer.hasContent(blockCaretContainer)) {
 					showBlockCaretContainer(blockCaretContainer);
 				}
 			}
@@ -796,6 +805,18 @@ define("tinymce/SelectionOverrides", [
 				}
 			});
 
+			editor.on('AfterSetSelectionRange', function(e) {
+				var rng = e.range;
+
+				if (!isRangeInCaretContainer(rng)) {
+					hideFakeCaret();
+				}
+
+				if (!isFakeSelectionElement(rng.startContainer.parentNode)) {
+					removeContentEditableSelection();
+				}
+			});
+
 			editor.on('focus', function() {
 				// Make sure we have a proper fake caret on focus
 				Delay.setEditorTimeout(editor, function() {
@@ -830,6 +851,7 @@ define("tinymce/SelectionOverrides", [
 				rootClass + ' .mce-offscreen-selection {' +
 					'position: absolute;' +
 					'left: -9999999999px;' +
+					'max-width: 1000000px;' +
 				'}' +
 				rootClass + ' *[contentEditable=false] {' +
 					'cursor: default;' +
@@ -849,13 +871,10 @@ define("tinymce/SelectionOverrides", [
 				startContainer, startOffset, endOffset, e, caretPosition, targetClone, origTargetClone;
 
 			if (!range) {
-				clearContentEditableSelection();
 				return null;
 			}
 
 			if (range.collapsed) {
-				clearContentEditableSelection();
-
 				if (!isRangeInCaretContainer(range)) {
 					caretPosition = getNormalizedRangeEndPoint(1, range);
 
@@ -883,7 +902,6 @@ define("tinymce/SelectionOverrides", [
 			}
 
 			if (startContainer.nodeType != 1) {
-				clearContentEditableSelection();
 				return null;
 			}
 
@@ -892,14 +910,12 @@ define("tinymce/SelectionOverrides", [
 			}
 
 			if (!isContentEditableFalse(node)) {
-				clearContentEditableSelection();
 				return null;
 			}
 
 			targetClone = origTargetClone = node.cloneNode(true);
 			e = editor.fire('ObjectSelected', {target: node, targetClone: targetClone});
 			if (e.isDefaultPrevented()) {
-				clearContentEditableSelection();
 				return null;
 			}
 
@@ -916,10 +932,12 @@ define("tinymce/SelectionOverrides", [
 			range = editor.dom.createRng();
 
 			// WHY is IE making things so hard! Copy on <i contentEditable="false">x</i> produces: <em>x</em>
+			// This is a ridiculous hack where we place the selection from a block over the inline element
+			// so that just the inline element is copied as is and not converted.
 			if (targetClone === origTargetClone && Env.ie) {
-				$realSelectionContainer.empty().append(Zwsp.ZWSP).append(targetClone).append(Zwsp.ZWSP);
-				range.setStart($realSelectionContainer[0].firstChild, 0);
-				range.setEnd($realSelectionContainer[0].lastChild, 1);
+				$realSelectionContainer.empty().append('<p style="font-size: 0" data-mce-bogus="all">\u00a0</p>').append(targetClone);
+				range.setStartAfter($realSelectionContainer[0].firstChild.firstChild);
+				range.setEndAfter(targetClone);
 			} else {
 				$realSelectionContainer.empty().append('\u00a0').append(targetClone).append('\u00a0');
 				range.setStart($realSelectionContainer[0].firstChild, 1);
@@ -938,11 +956,12 @@ define("tinymce/SelectionOverrides", [
 			editor.$('*[data-mce-selected]').removeAttr('data-mce-selected');
 			node.setAttribute('data-mce-selected', 1);
 			selectedContentEditableNode = node;
+			hideFakeCaret();
 
 			return range;
 		}
 
-		function clearContentEditableSelection() {
+		function removeContentEditableSelection() {
 			if (selectedContentEditableNode) {
 				selectedContentEditableNode.removeAttribute('data-mce-selected');
 				editor.$('#' + realSelectionId).remove();

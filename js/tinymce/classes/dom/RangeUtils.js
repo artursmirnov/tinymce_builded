@@ -21,8 +21,13 @@ define("tinymce/dom/RangeUtils", [
 	"tinymce/caret/CaretContainer"
 ], function(Tools, TreeWalker, NodeType, Range, CaretContainer) {
 	var each = Tools.each,
+		isContentEditableTrue = NodeType.isContentEditableTrue,
 		isContentEditableFalse = NodeType.isContentEditableFalse,
 		isCaretContainer = CaretContainer.isCaretContainer;
+
+	function hasCeProperty(node) {
+		return isContentEditableTrue(node) || isContentEditableFalse(node);
+	}
 
 	function getEndChild(container, index) {
 		var childNodes = container.childNodes;
@@ -36,6 +41,30 @@ define("tinymce/dom/RangeUtils", [
 		}
 
 		return childNodes[index] || container;
+	}
+
+	function findParent(node, rootNode, predicate) {
+		while (node && node !== rootNode) {
+			if (predicate(node)) {
+				return node;
+			}
+
+			node = node.parentNode;
+		}
+
+		return null;
+	}
+
+	function hasParent(node, rootNode, predicate) {
+		return findParent(node, rootNode, predicate) !== null;
+	}
+
+	function isFormatterCaret(node) {
+		return node.id === '_mce_caret';
+	}
+
+	function isCeFalseCaretContainer(node, rootNode) {
+		return isCaretContainer(node) && hasParent(node, rootNode, isFormatterCaret) === false;
 	}
 
 	function RangeUtils(dom) {
@@ -326,7 +355,7 @@ define("tinymce/dom/RangeUtils", [
 					walker = new TreeWalker(startNode, parentBlockContainer);
 					while ((node = walker[left ? 'prev' : 'next']())) {
 						// Break if we hit a non content editable node
-						if (dom.getContentEditableParent(node) === "false" || isCaretContainer(node)) {
+						if (dom.getContentEditableParent(node) === "false" || isCeFalseCaretContainer(node, dom.getRoot())) {
 							return;
 						}
 
@@ -573,6 +602,11 @@ define("tinymce/dom/RangeUtils", [
 		return null;
 	}
 
+	function moveOutOfContentEditableFalse(rng, rootNode) {
+		var parentElement = rng && rng.parentElement ? rng.parentElement() : null;
+		return isContentEditableFalse(findParent(parentElement, rootNode, hasCeProperty)) ? null : rng;
+	}
+
 	/**
 	 * Gets the caret range for the given x/y location.
 	 *
@@ -602,6 +636,8 @@ define("tinymce/dom/RangeUtils", [
 			} catch (ex) {
 				rng = findClosestIeRange(clientX, clientY, doc);
 			}
+
+			return moveOutOfContentEditableFalse(rng, doc.body);
 		}
 
 		return rng;
