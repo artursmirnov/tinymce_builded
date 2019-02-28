@@ -1,51 +1,22 @@
+/**
+ * Copyright (c) Tiny Technologies, Inc. All rights reserved.
+ * Licensed under the LGPL or a commercial license.
+ * For LGPL see License.txt in the project root for license information.
+ * For commercial licenses see https://www.tiny.cloud/
+ *
+ * Version: 5.0.1 (2019-02-21)
+ */
 (function () {
-var codesample = (function () {
+var codesample = (function (domGlobals) {
   'use strict';
-
-  var Cell = function (initial) {
-    var value = initial;
-    var get = function () {
-      return value;
-    };
-    var set = function (v) {
-      value = v;
-    };
-    var clone = function () {
-      return Cell(get());
-    };
-    return {
-      get: get,
-      set: set,
-      clone: clone
-    };
-  };
 
   var global = tinymce.util.Tools.resolve('tinymce.PluginManager');
 
   var global$1 = tinymce.util.Tools.resolve('tinymce.dom.DOMUtils');
 
-  var getContentCss = function (editor) {
-    return editor.settings.codesample_content_css;
-  };
-  var getLanguages = function (editor) {
-    return editor.settings.codesample_languages;
-  };
-  var getDialogMinWidth = function (editor) {
-    return Math.min(global$1.DOM.getViewPort().w, editor.getParam('codesample_dialog_width', 800));
-  };
-  var getDialogMinHeight = function (editor) {
-    return Math.min(global$1.DOM.getViewPort().w, editor.getParam('codesample_dialog_height', 650));
-  };
-  var $_6tgxjgaajm0ofy7e = {
-    getContentCss: getContentCss,
-    getLanguages: getLanguages,
-    getDialogMinWidth: getDialogMinWidth,
-    getDialogMinHeight: getDialogMinHeight
-  };
-
-  var window$$1 = {};
-  var global$2 = window$$1;
-  var _self = typeof window$$1 !== 'undefined' ? window$$1 : typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope ? self : {};
+  var window = {};
+  var global$2 = window;
+  var _self = typeof window !== 'undefined' ? window : typeof WorkerGlobalScope !== 'undefined' && domGlobals.self instanceof WorkerGlobalScope ? domGlobals.self : {};
   var Prism = function () {
     var lang = /\blang(?:uage)?-(?!\*)(\w+)\b/i;
     var _ = _self.Prism = {
@@ -136,27 +107,27 @@ var codesample = (function () {
       },
       plugins: {},
       highlightAll: function (async, callback) {
-        var elements = document.querySelectorAll('code[class*="language-"], [class*="language-"] code, code[class*="lang-"], [class*="lang-"] code');
+        var elements = domGlobals.document.querySelectorAll('code[class*="language-"], [class*="language-"] code, code[class*="lang-"], [class*="lang-"] code');
         for (var i = 0, element = void 0; element = elements[i++];) {
           _.highlightElement(element, async === true, callback);
         }
       },
       highlightElement: function (element, async, callback) {
-        var language, grammar, parent$$1 = element;
-        while (parent$$1 && !lang.test(parent$$1.className)) {
-          parent$$1 = parent$$1.parentNode;
+        var language, grammar, parent = element;
+        while (parent && !lang.test(parent.className)) {
+          parent = parent.parentNode;
         }
-        if (parent$$1) {
-          language = (parent$$1.className.match(lang) || [
+        if (parent) {
+          language = (parent.className.match(lang) || [
             ,
             ''
           ])[1];
           grammar = _.languages[language];
         }
         element.className = element.className.replace(lang, '').replace(/\s+/g, ' ') + ' language-' + language;
-        parent$$1 = element.parentNode;
-        if (/pre/i.test(parent$$1.nodeName)) {
-          parent$$1.className = parent$$1.className.replace(lang, '').replace(/\s+/g, ' ') + ' language-' + language;
+        parent = element.parentNode;
+        if (/pre/i.test(parent.nodeName)) {
+          parent.className = parent.className.replace(lang, '').replace(/\s+/g, ' ') + ' language-' + language;
         }
         var code = element.textContent;
         var env = {
@@ -171,7 +142,7 @@ var codesample = (function () {
         }
         _.hooks.run('before-highlight', env);
         if (async && _self.Worker) {
-          var worker = new Worker(_.filename);
+          var worker = new domGlobals.Worker(_.filename);
           worker.onmessage = function (evt) {
             env.highlightedCode = evt.data;
             _.hooks.run('before-insert', env);
@@ -264,13 +235,13 @@ var codesample = (function () {
       },
       hooks: {
         all: {},
-        add: function (name$$1, callback) {
+        add: function (name, callback) {
           var hooks = _.hooks.all;
-          hooks[name$$1] = hooks[name$$1] || [];
-          hooks[name$$1].push(callback);
+          hooks[name] = hooks[name] || [];
+          hooks[name].push(callback);
         },
-        run: function (name$$1, env) {
-          var callbacks = _.hooks.all[name$$1];
+        run: function (name, env) {
+          var callbacks = _.hooks.all[name];
           if (!callbacks || !callbacks.length) {
             return;
           }
@@ -285,7 +256,7 @@ var codesample = (function () {
       this.content = content;
       this.alias = alias;
     };
-    Token.stringify = function (o, language, parent$$1) {
+    Token.stringify = function (o, language, parent) {
       if (typeof o === 'string') {
         return o;
       }
@@ -296,7 +267,7 @@ var codesample = (function () {
       }
       var env = {
         type: o.type,
-        content: Token.stringify(o.content, language, parent$$1),
+        content: Token.stringify(o.content, language, parent),
         tag: 'span',
         classes: [
           'token',
@@ -304,7 +275,7 @@ var codesample = (function () {
         ],
         attributes: {},
         language: language,
-        parent: parent$$1
+        parent: parent
       };
       if (env.type === 'comment') {
         env.attributes.spellcheck = 'true';
@@ -315,8 +286,8 @@ var codesample = (function () {
       }
       _.hooks.run('wrap', env);
       var attributes = '';
-      for (var name$$1 in env.attributes) {
-        attributes += (attributes ? ' ' : '') + name$$1 + '="' + (env.attributes[name$$1] || '') + '"';
+      for (var name in env.attributes) {
+        attributes += (attributes ? ' ' : '') + name + '="' + (env.attributes[name] || '') + '"';
       }
       return '<' + env.tag + ' class="' + env.classes.join(' ') + '" ' + attributes + '>' + env.content + '</' + env.tag + '>';
     };
@@ -718,45 +689,188 @@ var codesample = (function () {
       return predicateFn(arg2);
     };
   }
-  var $_agtlhafjm0ofy90 = {
+  var Utils = {
     isCodeSample: isCodeSample,
     trimArg: trimArg
   };
 
+  var constant = function (value) {
+    return function () {
+      return value;
+    };
+  };
+  var never = constant(false);
+  var always = constant(true);
+
+  var never$1 = never;
+  var always$1 = always;
+  var none = function () {
+    return NONE;
+  };
+  var NONE = function () {
+    var eq = function (o) {
+      return o.isNone();
+    };
+    var call = function (thunk) {
+      return thunk();
+    };
+    var id = function (n) {
+      return n;
+    };
+    var noop = function () {
+    };
+    var nul = function () {
+      return null;
+    };
+    var undef = function () {
+      return undefined;
+    };
+    var me = {
+      fold: function (n, s) {
+        return n();
+      },
+      is: never$1,
+      isSome: never$1,
+      isNone: always$1,
+      getOr: id,
+      getOrThunk: call,
+      getOrDie: function (msg) {
+        throw new Error(msg || 'error: getOrDie called on none.');
+      },
+      getOrNull: nul,
+      getOrUndefined: undef,
+      or: id,
+      orThunk: call,
+      map: none,
+      ap: none,
+      each: noop,
+      bind: none,
+      flatten: none,
+      exists: never$1,
+      forall: always$1,
+      filter: none,
+      equals: eq,
+      equals_: eq,
+      toArray: function () {
+        return [];
+      },
+      toString: constant('none()')
+    };
+    if (Object.freeze)
+      Object.freeze(me);
+    return me;
+  }();
+  var some = function (a) {
+    var constant_a = function () {
+      return a;
+    };
+    var self = function () {
+      return me;
+    };
+    var map = function (f) {
+      return some(f(a));
+    };
+    var bind = function (f) {
+      return f(a);
+    };
+    var me = {
+      fold: function (n, s) {
+        return s(a);
+      },
+      is: function (v) {
+        return a === v;
+      },
+      isSome: always$1,
+      isNone: never$1,
+      getOr: constant_a,
+      getOrThunk: constant_a,
+      getOrDie: constant_a,
+      getOrNull: constant_a,
+      getOrUndefined: constant_a,
+      or: self,
+      orThunk: self,
+      map: map,
+      ap: function (optfab) {
+        return optfab.fold(none, function (fab) {
+          return some(fab(a));
+        });
+      },
+      each: function (f) {
+        f(a);
+      },
+      bind: bind,
+      flatten: constant_a,
+      exists: bind,
+      forall: bind,
+      filter: function (f) {
+        return f(a) ? me : NONE;
+      },
+      equals: function (o) {
+        return o.is(a);
+      },
+      equals_: function (o, elementEq) {
+        return o.fold(never$1, function (b) {
+          return elementEq(a, b);
+        });
+      },
+      toArray: function () {
+        return [a];
+      },
+      toString: function () {
+        return 'some(' + a + ')';
+      }
+    };
+    return me;
+  };
+  var from = function (value) {
+    return value === null || value === undefined ? NONE : some(value);
+  };
+  var Option = {
+    some: some,
+    none: none,
+    from: from
+  };
+
   var getSelectedCodeSample = function (editor) {
-    var node = editor.selection.getNode();
-    if ($_agtlhafjm0ofy90.isCodeSample(node)) {
-      return node;
+    var node = editor.selection ? editor.selection.getNode() : null;
+    if (Utils.isCodeSample(node)) {
+      return Option.some(node);
     }
-    return null;
+    return Option.none();
   };
   var insertCodeSample = function (editor, language, code) {
     editor.undoManager.transact(function () {
       var node = getSelectedCodeSample(editor);
       code = global$1.DOM.encode(code);
-      if (node) {
-        editor.dom.setAttrib(node, 'class', 'language-' + language);
-        node.innerHTML = code;
-        Prism.highlightElement(node);
-        editor.selection.select(node);
-      } else {
+      return node.fold(function () {
         editor.insertContent('<pre id="__new" class="language-' + language + '">' + code + '</pre>');
         editor.selection.select(editor.$('#__new').removeAttr('id')[0]);
-      }
+      }, function (n) {
+        editor.dom.setAttrib(n, 'class', 'language-' + language);
+        n.innerHTML = code;
+        Prism.highlightElement(n);
+        editor.selection.select(n);
+      });
     });
   };
   var getCurrentCode = function (editor) {
     var node = getSelectedCodeSample(editor);
-    if (node) {
-      return node.textContent;
-    }
-    return '';
+    return node.fold(function () {
+      return '';
+    }, function (n) {
+      return n.textContent;
+    });
   };
-  var $_gsi01acjm0ofy7m = {
+  var CodeSample = {
     getSelectedCodeSample: getSelectedCodeSample,
     insertCodeSample: insertCodeSample,
     getCurrentCode: getCurrentCode
   };
+
+  var getLanguages = function (editor) {
+    return editor.settings.codesample_languages;
+  };
+  var Settings = { getLanguages: getLanguages };
 
   var getLanguages$1 = function (editor) {
     var defaultLanguages = [
@@ -801,82 +915,118 @@ var codesample = (function () {
         value: 'cpp'
       }
     ];
-    var customLanguages = $_6tgxjgaajm0ofy7e.getLanguages(editor);
+    var customLanguages = Settings.getLanguages(editor);
     return customLanguages ? customLanguages : defaultLanguages;
   };
-  var getCurrentLanguage = function (editor) {
-    var matches;
-    var node = $_gsi01acjm0ofy7m.getSelectedCodeSample(editor);
-    if (node) {
-      matches = node.className.match(/language-(\w+)/);
-      return matches ? matches[1] : '';
-    }
-    return '';
+  var getCurrentLanguage = function (editor, fallback) {
+    var node = CodeSample.getSelectedCodeSample(editor);
+    return node.fold(function () {
+      return fallback;
+    }, function (n) {
+      var matches = n.className.match(/language-(\w+)/);
+      return matches ? matches[1] : fallback;
+    });
   };
-  var $_87mfk3agjm0ofy92 = {
+  var Languages = {
     getLanguages: getLanguages$1,
     getCurrentLanguage: getCurrentLanguage
   };
 
-  var $_47ybdma9jm0ofy7d = {
-    open: function (editor) {
-      var minWidth = $_6tgxjgaajm0ofy7e.getDialogMinWidth(editor);
-      var minHeight = $_6tgxjgaajm0ofy7e.getDialogMinHeight(editor);
-      var currentLanguage = $_87mfk3agjm0ofy92.getCurrentLanguage(editor);
-      var currentLanguages = $_87mfk3agjm0ofy92.getLanguages(editor);
-      var currentCode = $_gsi01acjm0ofy7m.getCurrentCode(editor);
-      editor.windowManager.open({
-        title: 'Insert/Edit code sample',
-        minWidth: minWidth,
-        minHeight: minHeight,
-        layout: 'flex',
-        direction: 'column',
-        align: 'stretch',
-        body: [
+  var typeOf = function (x) {
+    if (x === null)
+      return 'null';
+    var t = typeof x;
+    if (t === 'object' && Array.prototype.isPrototypeOf(x))
+      return 'array';
+    if (t === 'object' && String.prototype.isPrototypeOf(x))
+      return 'string';
+    return t;
+  };
+  var isType = function (type) {
+    return function (value) {
+      return typeOf(value) === type;
+    };
+  };
+  var isFunction = isType('function');
+
+  var slice = Array.prototype.slice;
+  var head = function (xs) {
+    return xs.length === 0 ? Option.none() : Option.some(xs[0]);
+  };
+  var from$1 = isFunction(Array.from) ? Array.from : function (x) {
+    return slice.call(x);
+  };
+
+  var open = function (editor) {
+    var languages = Languages.getLanguages(editor);
+    var defaultLanguage = head(languages).fold(function () {
+      return '';
+    }, function (l) {
+      return l.value;
+    });
+    var currentLanguage = Languages.getCurrentLanguage(editor, defaultLanguage);
+    var currentCode = CodeSample.getCurrentCode(editor);
+    editor.windowManager.open({
+      title: 'Insert/Edit Code Sample',
+      size: 'large',
+      body: {
+        type: 'panel',
+        items: [
           {
-            type: 'listbox',
+            type: 'selectbox',
             name: 'language',
             label: 'Language',
-            maxWidth: 200,
-            value: currentLanguage,
-            values: currentLanguages
+            items: languages
           },
           {
-            type: 'textbox',
+            type: 'textarea',
             name: 'code',
-            multiline: true,
-            spellcheck: false,
-            ariaLabel: 'Code view',
-            flex: 1,
-            style: 'direction: ltr; text-align: left',
-            classes: 'monospace',
-            value: currentCode,
-            autofocus: true
+            label: 'Code view'
           }
-        ],
-        onSubmit: function (e) {
-          $_gsi01acjm0ofy7m.insertCodeSample(editor, e.data.language, e.data.code);
+        ]
+      },
+      buttons: [
+        {
+          type: 'cancel',
+          name: 'cancel',
+          text: 'Cancel'
+        },
+        {
+          type: 'submit',
+          name: 'save',
+          text: 'Save',
+          primary: true
         }
-      });
-    }
+      ],
+      initialData: {
+        language: currentLanguage,
+        code: currentCode
+      },
+      onSubmit: function (api) {
+        var data = api.getData();
+        CodeSample.insertCodeSample(editor, data.language, data.code);
+        api.close();
+      }
+    });
   };
+  var Dialog = { open: open };
 
   var register = function (editor) {
     editor.addCommand('codesample', function () {
       var node = editor.selection.getNode();
-      if (editor.selection.isCollapsed() || $_agtlhafjm0ofy90.isCodeSample(node)) {
-        $_47ybdma9jm0ofy7d.open(editor);
+      if (editor.selection.isCollapsed() || Utils.isCodeSample(node)) {
+        Dialog.open(editor);
       } else {
         editor.formatter.toggle('code');
       }
     });
   };
-  var $_dve9fsa8jm0ofy7c = { register: register };
+  var Commands = { register: register };
 
   var setup = function (editor) {
     var $ = editor.$;
     editor.on('PreProcess', function (e) {
-      $('pre[contenteditable=false]', e.node).filter($_agtlhafjm0ofy90.trimArg($_agtlhafjm0ofy90.isCodeSample)).each(function (idx, elm) {
+      $('pre[contenteditable=false]', e.node).filter(Utils.trimArg(Utils.isCodeSample)).each(function (idx, elm) {
         var $elm = $(elm), code = elm.textContent;
         $elm.attr('class', $.trim($elm.attr('class')));
         $elm.removeAttr('contentEditable');
@@ -886,7 +1036,7 @@ var codesample = (function () {
       });
     });
     editor.on('SetContent', function () {
-      var unprocessedCodeSamples = $('pre').filter($_agtlhafjm0ofy90.trimArg($_agtlhafjm0ofy90.isCodeSample)).filter(function (idx, elm) {
+      var unprocessedCodeSamples = $('pre').filter(Utils.trimArg(Utils.isCodeSample)).filter(function (idx, elm) {
         return elm.contentEditable !== 'false';
       });
       if (unprocessedCodeSamples.length) {
@@ -904,57 +1054,46 @@ var codesample = (function () {
       }
     });
   };
-  var $_7swko9ahjm0ofy94 = { setup: setup };
+  var FilterContent = { setup: setup };
 
-  var loadCss = function (editor, pluginUrl, addedInlineCss, addedCss) {
-    var linkElm;
-    var contentCss = $_6tgxjgaajm0ofy7e.getContentCss(editor);
-    if (editor.inline && addedInlineCss.get()) {
-      return;
-    }
-    if (!editor.inline && addedCss.get()) {
-      return;
-    }
-    if (editor.inline) {
-      addedInlineCss.set(true);
-    } else {
-      addedCss.set(true);
-    }
-    if (contentCss !== false) {
-      linkElm = editor.dom.create('link', {
-        rel: 'stylesheet',
-        href: contentCss ? contentCss : pluginUrl + '/css/prism.css'
-      });
-      editor.getDoc().getElementsByTagName('head')[0].appendChild(linkElm);
-    }
+  var isCodeSampleSelection = function (editor) {
+    var node = editor.selection.getStart();
+    return editor.dom.is(node, 'pre.language-markup');
   };
-  var $_7f0gvpaijm0ofy96 = { loadCss: loadCss };
-
   var register$1 = function (editor) {
-    editor.addButton('codesample', {
-      cmd: 'codesample',
-      title: 'Insert/Edit code sample'
+    editor.ui.registry.addToggleButton('codesample', {
+      icon: 'code-sample',
+      tooltip: 'Insert/edit code sample',
+      onAction: function () {
+        return Dialog.open(editor);
+      },
+      onSetup: function (api) {
+        var nodeChangeHandler = function () {
+          api.setActive(isCodeSampleSelection(editor));
+        };
+        editor.on('nodeChange', nodeChangeHandler);
+        return function () {
+          return editor.off('nodeChange', nodeChangeHandler);
+        };
+      }
     });
-    editor.addMenuItem('codesample', {
-      cmd: 'codesample',
-      text: 'Code sample',
-      icon: 'codesample'
+    editor.ui.registry.addMenuItem('codesample', {
+      text: 'Code sample...',
+      icon: 'code-sample',
+      onAction: function () {
+        return Dialog.open(editor);
+      }
     });
   };
-  var $_3p6ti4ajjm0ofy97 = { register: register$1 };
+  var Buttons = { register: register$1 };
 
-  var addedInlineCss = Cell(false);
   global.add('codesample', function (editor, pluginUrl) {
-    var addedCss = Cell(false);
-    $_7swko9ahjm0ofy94.setup(editor);
-    $_3p6ti4ajjm0ofy97.register(editor);
-    $_dve9fsa8jm0ofy7c.register(editor);
-    editor.on('init', function () {
-      $_7f0gvpaijm0ofy96.loadCss(editor, pluginUrl, addedInlineCss, addedCss);
-    });
+    FilterContent.setup(editor);
+    Buttons.register(editor);
+    Commands.register(editor);
     editor.on('dblclick', function (ev) {
-      if ($_agtlhafjm0ofy90.isCodeSample(ev.target)) {
-        $_47ybdma9jm0ofy7d.open(editor);
+      if (Utils.isCodeSample(ev.target)) {
+        Dialog.open(editor);
       }
     });
   });
@@ -963,5 +1102,5 @@ var codesample = (function () {
 
   return Plugin;
 
-}());
+}(window));
 })();
